@@ -1,0 +1,7 @@
+Time of interest:	2017-03-09-20-22-24
+time step:		0.1
+time of simulation:	20000
+Mask angle(degrees):	5
+klob coeff(alpha):	0.1211E-07  0.1490E-07 -0.5960E-07 -0.1192E-06
+klob coeff(beta):	0.9626E+05  0.8192E+05 -0.1966E+06 -0.3932E+06
+Humidity: 		0.92
