@@ -2,6 +2,7 @@
 
 Eigen::Matrix3d CSensor::m_TransformMatrix(double lat, double longi)
 {
+	// Use to Transform ECEF Vector to NED Vector (C^n_e)
 	return(m_TransformMatrix(0, -EIGEN_PI / 2 - lat, longi));
 }
 

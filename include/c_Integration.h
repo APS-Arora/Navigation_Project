@@ -9,6 +9,8 @@
 #include <vector>
 #include <Eigen\Dense>
 #include "c_main.h"
+#include "ConstVar.h"
+#include "INS.h"
 
 using namespace std;
 using namespace Eigen;
@@ -21,17 +23,37 @@ class CInt
 	//State Prop Vector
 	//Covariance Matrix
 public:
-	struct InsPosVel
+	struct ErrorState
 	{
-		Vector3d position, velocity;
-		Matrix3d Cb_e;
-	};
-	InsPosVel *m_InsPosVel;
+		Vector3d position,
+				 velocity,
+				 attitude,
+				 accel_bias,
+				 gyro_bias;
+		double   clock_offset,
+				 clock_drift;
+	} m_ErrorState;
+	Matrix3d ErrorCov;
+
+	struct NoiseConfig
+	{
+		double  accel_PSD,
+				gyro_PSD,
+				accel_bias_PSD,
+				gyro_bias_PSD,
+				clock_offset_PSD,
+				clock_drift_PSD;
+	} m_NoiseConfig;
+
 	CInt();
 	~CInt();
+	void m_predict(INS::INS_States, CMain::InsOutput);
 	//LeastSquare();
 	//GPSPosVel();
 	//KalmanFilter();
 	//MainFunction();
+protected:
+	double dt;
+	Matrix3d m_Skew(Vector3d);
 };
 

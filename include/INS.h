@@ -1,7 +1,7 @@
 // Header file for the INS class
 
 #pragma once
-#include "Sensor.h"
+#include "CSensor.h"
 #include "c_main.h"
 #include "c_Integration.h"
 #define _USE_MATH_DEFINES
@@ -18,11 +18,8 @@
 using namespace std;
 using namespace Eigen;
 
-#ifndef INS_H
-#define INS_H
-
 class INS :
-	public Sensor
+	public CSensor
 {
 	double m_step;
 	bool m_turn;
@@ -34,14 +31,20 @@ public:
 	INS();
 	~INS();
 	double NoiseGen(string, double);
-	Vector3d GravityECEF(double[3]);
+	Vector3d GravityECEF(Vector3d position);
 	void IMU_meas();
 	void SensorRead();
-	void main_function(struct CMain::UserMot m_UserMotion, CMain::InsOutput *);
-	void EstPosVel(struct CMain::UserMot m_UserMotion, struct CInt::InsPosVel *m_InsPosVel);
+	void main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *);
+	void INS_Estimate();
+	void Calc_NED_States();
 	struct CMain::UserMot m_InsUserMotion;
-	struct CInt::InsPosVel *m_InsUserPosVel = new CInt::InsPosVel;
 	struct CMain::InsOutput *m_InsUserOutput = new CMain::InsOutput;
+	struct INS_States
+	{
+		Vector3d position, velocity, velocity_n, accel_bias,gyro_bias;
+		Matrix3d Cb_e, Cb_n;
+		double latitude, longitude, height;
+	} m_INS_States;
 	struct SensorData {
 		SensorData() : acc_orientation(3), gyro_orientation(3), acc_misal(3), gyro_misal(3) {}
 		vector<double> acc_orientation, gyro_orientation, acc_misal, gyro_misal;
@@ -54,5 +57,3 @@ public:
 	};
 	SensorData m_Sensor;
 };
-
-#endif

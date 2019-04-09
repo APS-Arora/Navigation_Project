@@ -34,14 +34,15 @@
 *********************************************************************************************/
 
 const double GMProd_Const = 3.986004418E+14,
-			Pi_Const = 3.141592653589793,
-			RtEarthRotn_Const = 7.2921151467 / 100000,
-			SecsInWeek_Const = 604800,
-			SpeedLight_Const = 299792458,
-			PolarRadiusOfEarth_Const = 6356752.3142,
-			EqtRadiusOfEarth_Const = 6378137.0,
-			RadiusOfEarth_Const = 6356766.0,
-			Exp_Const = 2.7183;
+			 Pi_Const = 3.141592653589793,
+			 RtEarthRotn_Const = 7.2921151467 / 100000,
+			 SecsInWeek_Const = 604800,
+			 SpeedLight_Const = 299792458,
+			 PolarRadiusOfEarth_Const = 6356752.3142,
+			 EqtRadiusOfEarth_Const = 6378137.0,
+			 RadiusOfEarth_Const = 6356766.0,
+			 Exp_Const = 2.7183,
+			 Eccentricity_Const = 0.0818191908425;
 
 const int MaxGpsSat_Const = 31,
 		MaxIrnssSat_Const = 7,
