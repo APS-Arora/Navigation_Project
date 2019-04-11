@@ -50,7 +50,7 @@ public:
 		acc_misal_error, gyro_misal_error,
 		acc_inrun, gyro_inrun,
 		acc_noise, gyro_noise;
-
+		Matrix3d cmat_bn;
 	};
 	InsOutput *m_InsOutput = new InsOutput;
 	struct TimeVar{

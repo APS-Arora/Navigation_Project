@@ -49,6 +49,7 @@ public:
 	~CInt();
 	void m_predict(INS::INS_States, CMain::InsOutput);
 	Vector3d GravityECEF(Vector3d position);
+	void LsPosVel(CMain::SatData *, INS::INS_States&);
 	//LeastSquare();
 	//GPSPosVel();
 	//KalmanFilter();
@@ -56,5 +57,24 @@ public:
 protected:
 	double dt;
 	Matrix3d m_Skew(Vector3d);
+	struct GpsYumaData
+	{
+		double  sat_id,
+		health,
+		eccent,
+		time,
+		a_o_i,
+		rt_r_asc,
+		sqrt_semi_maj,
+		r_asc,
+		arg_of_pge,
+		m_ini,
+		af0s,
+		af1s,
+		week,
+		semi_maj;
+	};
+	GpsYumaData *mp_Yuma;
+	int YumaRead();
 };
 

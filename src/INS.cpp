@@ -75,7 +75,7 @@ Vector3d INS::GravityECEF(Vector3d position){
 void INS::IMU_meas(void){
 
 	Vector3d gravity, we_ie;
-	Matrix3d cmat_en, cmat_bn, omega_e_ie;
+	Matrix3d cmat_en, omega_e_ie;
 
 	// Defining the constants to be used in the program
 	we_ie << 0, 0, earth_rotn_rate;
@@ -227,7 +227,8 @@ void INS::main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *m_InsOutp
 		// Adding the error terms to the truth
 		m_InsUserOutput->sf_actual = sf_acc + (m_InsUserOutput->acc_bias + m_InsUserOutput->acc_misal_error + m_InsUserOutput->acc_inrun + m_InsUserOutput->acc_scale + m_InsUserOutput->acc_noise);
 		m_InsUserOutput->ang_actual = ang_gyro + m_InsUserOutput->gyro_bias + gyro_error_mat*ang_gyro + m_InsUserOutput->gyro_inrun + m_InsUserOutput->gyro_noise;
-
+		//Storing the true Cb_n matrix for use in GPS-INS integration
+		m_InsUserOutput->cmat_bn = cmat_bn;
 		
 		//Copying the data to Cmain object
 		memcpy(m_InsOutput, m_InsUserOutput, sizeof(*m_InsOutput));
@@ -316,4 +317,12 @@ void INS::Calc_NED_States()
 
 	// TRANSFORMING ATTITUDE TO NED
 	m_INS_States.Cb_n = Ce_n*m_INS_States.Cb_e;
+}
+
+void INS::InitAttitude(CMain::InsOutput *m_InsOutput){
+	Matrix3d delta_Cb_n, est_Cb_n;
+	double deg_to_rad = EIGEN_PI / 180.;
+	delta_Cb_n = m_TransformMatrix(-0.05*deg_to_rad, 0.04*deg_to_rad, 1 * deg_to_rad);
+	est_Cb_n = delta_Cb_n * m_InsOutput->cmat_bn;
+	m_INS_States.Cb_e = m_TransformMatrix(m_INS_States.latitude, m_INS_States.longitude);
 }

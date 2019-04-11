@@ -22,7 +22,7 @@ class INS :
 	double m_step;
 	bool m_turn;
 	Vector3d sf_ib, wb_ib;
-	Matrix3d Cb_e;
+	Matrix3d cmat_bn;
 	double earth_rotn_rate = 0.00007292115, eccen = 0.0818191908425;
 	//Updated INS Solution
 public:
@@ -35,6 +35,7 @@ public:
 	void main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *);
 	void INS_Estimate();
 	void Calc_NED_States();
+	void InitAttitude(CMain::InsOutput *);
 	struct CMain::UserMot m_InsUserMotion;
 	struct CMain::InsOutput *m_InsUserOutput = new CMain::InsOutput;
 	struct INS_States
