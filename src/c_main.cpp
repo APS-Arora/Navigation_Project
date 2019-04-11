@@ -18,6 +18,7 @@
 #include "INS.h"
 #include "ConstVar.h"
 #include "CDelayCalc.h"
+#include "COtherSensors.h"
 
 CMain::CMain()
 {
@@ -111,12 +112,20 @@ int CMain::MainFunc()
 	ofstream ofile_ins("ins_output.csv", ios::out | ios::trunc);
 	ofile_ins << "Specific_Force_X" << ',' << "Specific_Force_Y" << ',' << "Specific_Force_Z" << ',' << "Angular Rate_X" << ',' << "Angular Rate_Y" << ',' << "Angular Rate_Z" << '\n';
 
+	// Output File for Barometric Altimeter and Magnetometer
+	ofstream ofile_osensors("sensed_output_other_sensors.csv");
+	ofile_osensors << "Time, Magnetic Reading X, Magnetic Reading Y, Magnetic Reading Z , Magnetic Heading, Pressure\n";
+	ofstream ofile_osensors_truth("true_output_other_sensors.csv");
+	ofile_osensors << "Time, Magnetic Reading X, Magnetic Reading Y, Magnetic Reading Z , Magnetic Heading, Pressure\n";
+
 	// Precision for output files
 	ofile_gps.precision(15);
 	ofile_irnss.precision(15);
 	ofile_gps_delay.precision(15);
 	ofile_irnss_delay.precision(15);
 	ofile_ins.precision(15);
+	ofile_osensors.precision(15);
+	ofile_osensors_truth.precision(15);
 	std::cout.precision(10);
 	/* Input file */
 	ifstream iFile("UserConfigInput.txt");
@@ -186,6 +195,9 @@ int CMain::MainFunc()
 	//Create INS object
 	INS ins_obj;
 
+	// Create object for Other Sensors
+	COtherSensors os_obj("OtherSensorsConfig.csv");
+
 	int time_iter = 0;
 
 	// For loop to calculate all variables for each time step
@@ -252,6 +264,13 @@ int CMain::MainFunc()
 		ofile_ins << m_InsOutput->acc_misal_error[0] << comma << m_InsOutput->acc_misal_error[1] << comma << m_InsOutput->acc_misal_error[2] << comma << m_InsOutput->gyro_misal_error[0] << comma << m_InsOutput->gyro_misal_error[1] << comma << m_InsOutput->gyro_misal_error[2] << comma;
 		ofile_ins << m_InsOutput->acc_inrun[0] << comma << m_InsOutput->acc_inrun[1] << comma << m_InsOutput->acc_inrun[2] << comma << m_InsOutput->gyro_inrun[0] << comma << m_InsOutput->gyro_inrun[1] << comma << m_InsOutput->gyro_inrun[2] << comma;
 		ofile_ins << m_InsOutput->acc_noise[0] << comma << m_InsOutput->acc_noise[1] << comma << m_InsOutput->acc_noise[2] << comma << m_InsOutput->gyro_noise[0] << comma << m_InsOutput->gyro_noise[1] << comma << m_InsOutput->gyro_noise[2] << '\n';
+
+		// Taking Altimeter and Magnetic Measurements
+		os_obj.m_Measure(m_GpsTimeData, m_UserMotion);
+
+		//Writing the outputs to file
+		ofile_osensors << itervar << ',' << os_obj.m_RecentMagMeasurement.mag_strength.x() << ',' << os_obj.m_RecentMagMeasurement.mag_strength.y() << ',' << os_obj.m_RecentMagMeasurement.mag_strength.z() << ',' << os_obj.m_RecentMagMeasurement.mag_heading << ',' << os_obj.m_RecentPressMeasurement << '\n';
+		ofile_osensors_truth << itervar << ',' << os_obj.m_RecentMagTruth.mag_strength.x() << ',' << os_obj.m_RecentMagTruth.mag_strength.y() << ',' << os_obj.m_RecentMagTruth.mag_strength.z() << ',' << os_obj.m_RecentMagTruth.mag_heading << ',' << os_obj.m_RecentPressTruth << '\n';
 
 		//Calculate reciever clock error
 		CalcClockError();

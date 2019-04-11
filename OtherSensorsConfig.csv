@@ -1,0 +1,21 @@
+Orientation,Magnetometer,Heading ,0.1
+Orientation,Magnetometer,Elevation ,0.13
+Orientation,Magnetometer,Bank,0.08
+MAG X,Hard Iron,Bi [mGauss],50
+MAG X,Soft Iron - Scale Factor Error,Si,0.40417521
+MAG X,Soft Iron - Cross Coupling,Cy,0.51107798
+MAG X,Soft Iron - Cross Coupling,Cz,0.130733614
+MAG Y,Hard Iron,Bi [mGauss],100
+MAG Y,Soft Iron - Scale Factor Error,Si,-0.573565734
+MAG Y,Soft Iron - Cross Coupling,Cx,0.075191867
+MAG Y,Soft Iron - Cross Coupling,Cz,-0.25
+MAG Z,Hard Iron,Bi [mGauss],10
+MAG Z,Soft Iron - Scale Factor Error,Si,0.033661883
+MAG Z,Soft Iron - Cross Coupling,Cy,-0.266029239
+MAG Z,Soft Iron - Cross Coupling,Cx,0.266029239
+Local Variations,North,Spectral Power Density [mGauss],10
+Local Variations,East,Spectral Power Density [mGauss],10
+Local Variations,Down,Spectral Power Density [mGauss],10
+,,,
+,,,
+Pressure Noise,Barometric Altimeter,Spectral Power Density [Pa],19
