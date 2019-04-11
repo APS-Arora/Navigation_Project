@@ -83,7 +83,6 @@
     <ClCompile Include="src\c_main.cpp" />
     <ClCompile Include="src\final_main.cpp" />
     <ClCompile Include="src\INS.cpp" />
-    <ClCompile Include="src\Sensor.cpp" />
     <ClCompile Include="src\stdatmos.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -97,7 +96,6 @@
     <ClInclude Include="include\c_main.h" />
     <ClInclude Include="include\GlobalFunction.h" />
     <ClInclude Include="include\INS.h" />
-    <ClInclude Include="include\Sensor.h" />
     <ClInclude Include="include\stdatmos.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -1,9 +1,7 @@
-// Header file for the INS class
-
 #pragma once
 #include "CSensor.h"
 #include "c_main.h"
-#include "c_Integration.h"
+//#include "c_Integration.h"
 #define _USE_MATH_DEFINES
 #include <iostream>
 #include <string>

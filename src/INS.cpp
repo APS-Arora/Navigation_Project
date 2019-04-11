@@ -249,7 +249,7 @@ void INS::INS_Estimate()
 	Matrix3d C_new_old;
 	if (mag_alpha > 1e-8)
 	{
-		C_new_old = Matrix3d::Identity() + sin(mag_alpha) / mag_alpha*Alpha_ib_b + (1 - cos(mag_alpha)) / pow(mag_alpha, 2) * Alpha_ib_b.pow(2);
+		C_new_old = Matrix3d::Identity() + sin(mag_alpha) / mag_alpha*Alpha_ib_b + (1 - cos(mag_alpha)) / pow(mag_alpha, 2) * Alpha_ib_b.pow(2.);
 	}
 	else
 	{
