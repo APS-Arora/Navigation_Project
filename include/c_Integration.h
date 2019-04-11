@@ -33,7 +33,7 @@ public:
 		double   clock_offset,
 				 clock_drift;
 	} m_ErrorState;
-	Matrix3d ErrorCov;
+	Matrix<double, 17, 17> ErrorCov;
 
 	struct NoiseConfig
 	{
@@ -48,6 +48,7 @@ public:
 	CInt();
 	~CInt();
 	void m_predict(INS::INS_States, CMain::InsOutput);
+	Vector3d GravityECEF(Vector3d position);
 	//LeastSquare();
 	//GPSPosVel();
 	//KalmanFilter();
