@@ -79,11 +79,20 @@ public:
 			elevation,
 			elevation_check;
 		double clock_correction;
+		bool visible;
 	};
 	
 	SatData *mp_GpsSatData;
 	SatData *mp_IrnssSatData;
-
+	struct GNSS_Measurement         // To be modified in future
+	{
+		double pseudo_range;
+		double pseudo_range_rate;
+		Vector3d SatPos, SatVel;    // To be replaced with ephimeris in future
+		TimeVar time_data;
+		double clock_correction;
+		bool visible;
+	} m_GPS_measurements[31];
 	struct AtmSatDelay{
 
 		double tropo_delay_hop,
@@ -132,13 +141,12 @@ public:
 	};
 	discriminator m_CodeDisc;
 	discriminator m_CarrDisc;
-	double elevation_deg;
 	double c_n0;
 
 	double f_co; //Code chipping rate
 	double f_ca; // Carrier Frequency
 
-	void CalcTrackErr();
+	void CalcTrackErr(double elevation_deg);
 	double m_prTrackErr;
 	double m_prrTrackErr;
 
@@ -153,7 +161,9 @@ public:
 			m_TimeIntoRun,
 			m_TimeIntoRunHr,
 			m_pseudo_range[31],
-			m_pseudo_range_irnss[8];
+			m_pseudo_range_rate[31],
+			m_pseudo_range_irnss[8],
+			m_pseudo_range_rate_irnss[8];
 		static bool end_usermotion_file_flag;
 
 		

@@ -11,6 +11,7 @@
 #include "c_main.h"
 #include "ConstVar.h"
 #include "INS.h"
+#include "CDelayCalc.h"
 
 using namespace std;
 using namespace Eigen;
@@ -42,14 +43,18 @@ public:
 				accel_bias_PSD,
 				gyro_bias_PSD,
 				clock_offset_PSD,
-				clock_drift_PSD;
+				clock_drift_PSD,
+				pseudo_range_PSD,
+				pseudo_range_rate_PSD;
 	} m_NoiseConfig;
 
 	CInt();
 	~CInt();
 	void m_predict(INS::INS_States, CMain::InsOutput);
+	void m_correct(INS::INS_States&, CMain::GNSS_Measurement*);
 	Vector3d GravityECEF(Vector3d position);
 	void LsPosVel(CMain::SatData *, INS::INS_States&);
+	void InitErrorCov();
 	//LeastSquare();
 	//GPSPosVel();
 	//KalmanFilter();
@@ -57,24 +62,8 @@ public:
 protected:
 	double dt;
 	Matrix3d m_Skew(Vector3d);
-	struct GpsYumaData
-	{
-		double  sat_id,
-		health,
-		eccent,
-		time,
-		a_o_i,
-		rt_r_asc,
-		sqrt_semi_maj,
-		r_asc,
-		arg_of_pge,
-		m_ini,
-		af0s,
-		af1s,
-		week,
-		semi_maj;
-	};
-	GpsYumaData *mp_Yuma;
-	int YumaRead();
+	int no_sat;
+	CDelayCalc m_Delay;
+	CMain::DelayCalcParam m_DelayParams;
 };
 
