@@ -116,7 +116,7 @@ int CMain::MainFunc()
 	ofstream ofile_osensors("sensed_output_other_sensors.csv");
 	ofile_osensors << "Time, Magnetic Reading X, Magnetic Reading Y, Magnetic Reading Z , Magnetic Heading, Pressure\n";
 	ofstream ofile_osensors_truth("true_output_other_sensors.csv");
-	ofile_osensors << "Time, Magnetic Reading X, Magnetic Reading Y, Magnetic Reading Z , Magnetic Heading, Pressure\n";
+	ofile_osensors_truth << "Time, Magnetic Reading X, Magnetic Reading Y, Magnetic Reading Z , Magnetic Heading, Pressure\n";
 
 	// Precision for output files
 	ofile_gps.precision(15);
@@ -296,23 +296,13 @@ int CMain::MainFunc()
 				m_DelayCalc,
 				m_DelayPram);
 
-			// Calculate pseudo range 			
+			//Calculate code tracking error
+			CalcTrackErr(abs(mp_GpsSatData[gps_sat_id].elevation)*180.0 / Pi_Const);
+
+			// Calculate pseudo range and pseudo range rate		
 				m_pseudo_range[gps_sat_id] = mp_GpsSatData[gps_sat_id].range + m_DelayCalc.iono_delay_klob + m_DelayCalc.tropo_delay_hop -
-				mp_GpsSatData[gps_sat_id].clock_correction;
-
-			if (gps_sat_id == 3){
-
-				elevation_deg = abs(mp_GpsSatData[gps_sat_id].elevation)*180.0/Pi_Const;
-				//Calculate code tracking error
-				CalcTrackErr();
-
-				//Write tracking error to file
-				ofile_track_error << m_prTrackErr<< " " << m_prrTrackErr << " ";
-
-				//Update pseudo range and range rate
-				m_pseudo_range[gps_sat_id] += SpeedLight_Const*m_UserErr(0, 0) + m_prTrackErr;
-				mp_GpsSatData[gps_sat_id].range_rt += SpeedLight_Const*m_UserErr(1, 0) + m_prrTrackErr;
-			}
+					mp_GpsSatData[gps_sat_id].clock_correction + SpeedLight_Const*m_UserErr(0, 0) + m_prTrackErr;
+				m_pseudo_range_rate[gps_sat_id] = mp_GpsSatData[gps_sat_id].range_rt + SpeedLight_Const*m_UserErr(1, 0) + m_prrTrackErr;
 
 			// Write output for the GPS data
 			ofile_gps << mp_GpsSatData[gps_sat_id].x_cord << "  ";
@@ -327,6 +317,7 @@ int CMain::MainFunc()
 			ofile_gps << mp_GpsSatData[gps_sat_id].elevation << "  ";
 			ofile_gps << m_TimeIntoRunHr << "  ";
 			ofile_gps << m_pseudo_range[gps_sat_id] << "  ";
+			ofile_gps << m_pseudo_range_rate[gps_sat_id] << "  ";
 			ofile_gps << mp_GpsSatData[gps_sat_id].clock_correction << endl;
 
 
@@ -337,6 +328,8 @@ int CMain::MainFunc()
 			ofile_gps_delay << mp_GpsSatData[gps_sat_id].elevation << "  ";
 			ofile_gps_delay << m_TimeIntoRunHr << endl;
 			
+			//Write tracking error to file
+			ofile_track_error << m_prTrackErr << " " << m_prrTrackErr << " ";
 		}
 	
 		
@@ -357,23 +350,13 @@ int CMain::MainFunc()
 										m_DelayCalc,
 										m_DelayPram);
 
+			//Calculate code tracking error
+			CalcTrackErr(abs(mp_IrnssSatData[irnss_sat_id].elevation)*180.0 / Pi_Const);
+
 			// Calculate pseudo range after adding iono and tropo delay and subtracting clock error			
 			m_pseudo_range_irnss[irnss_sat_id] = mp_IrnssSatData[irnss_sat_id].range + m_DelayCalc.iono_delay_klob + m_DelayCalc.tropo_delay_hop -
-																mp_IrnssSatData[irnss_sat_id].clock_correction;
-
-			if (irnss_sat_id == 3){
-
-				elevation_deg = abs(mp_IrnssSatData[irnss_sat_id].elevation)*180.0 / Pi_Const;
-				//Calculate code tracking error
-				CalcTrackErr();
-
-				//Write tracking error to file
-				ofile_track_error << m_prTrackErr << " " << m_prrTrackErr << endl;
-
-				//Update pseudo range and range rate with reciever clock and code tracking error
-				m_pseudo_range_irnss[irnss_sat_id] += SpeedLight_Const*m_UserErr(0, 0) + m_prTrackErr;
-				mp_IrnssSatData[irnss_sat_id].range_rt += SpeedLight_Const*m_UserErr(1, 0) + m_prrTrackErr;
-			}
+				mp_IrnssSatData[irnss_sat_id].clock_correction + SpeedLight_Const*m_UserErr(0, 0) + m_prTrackErr;
+			m_pseudo_range_rate_irnss[irnss_sat_id] = mp_IrnssSatData[irnss_sat_id].range_rt + SpeedLight_Const*m_UserErr(1, 0) + m_prrTrackErr;
 
 
 			ofile_irnss << mp_IrnssSatData[irnss_sat_id].x_cord << "  ";
@@ -388,6 +371,7 @@ int CMain::MainFunc()
 			ofile_irnss << mp_IrnssSatData[irnss_sat_id].elevation << "  ";
 			ofile_irnss << m_TimeIntoRunHr << "  ";
 			ofile_irnss << m_pseudo_range_irnss[irnss_sat_id] << "  ";
+			ofile_irnss << m_pseudo_range_rate_irnss[irnss_sat_id] << "  ";
 			ofile_irnss << mp_IrnssSatData[irnss_sat_id].clock_correction << endl;
 
 			//Write outbput for calculated delay
@@ -396,6 +380,9 @@ int CMain::MainFunc()
 			ofile_irnss_delay << mp_IrnssSatData[irnss_sat_id].azimuth << " ";
 			ofile_irnss_delay << mp_IrnssSatData[irnss_sat_id].elevation << "  ";
 			ofile_irnss_delay << m_TimeIntoRunHr << endl;
+
+			//Write tracking error to file
+			ofile_track_error << m_prTrackErr << " " << m_prrTrackErr << endl;
 		}
 		
 		
@@ -919,7 +906,7 @@ void CMain::CalcClockError(){
 *
 ***********************************************************************************************************/
 
-void CMain::CalcTrackErr(){
+void CMain::CalcTrackErr(double elevation_deg){
 	
 	double sdTrackErr;
 	c_n0 = pow(10, 2.0) + ((pow(10, 4.5) - pow(10, 2.0)) / (75 - 5))*(elevation_deg-5);

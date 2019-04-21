@@ -173,7 +173,7 @@ void CDelayCalc::TropoDelayHop()
 
 	double some_val;
 
-	height_above_sea = geo.ConvertHeight(m_Lat, m_Longi, m_Height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);;
+	height_above_sea = geo.ConvertHeight(m_Lat * 180 / EIGEN_PI, m_Longi * 180 / EIGEN_PI, m_Height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);;
 
 	// Call function to calcualte temperature, pressure and density using standard atmosphere model
 	StdAtm(height_above_sea);

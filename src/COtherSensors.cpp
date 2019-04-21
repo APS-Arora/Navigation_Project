@@ -69,11 +69,11 @@ void COtherSensors::m_Measure(CMain::TimeVar time, CMain::UserMot state)
 	GeographicLib::MagneticModel::FieldComponents(Bx, By, Bz, dummy, dummy, declination, dummy);
 	m_RecentMagTruth.mag_heading = yaw_nm - declination;
 	b_heading = (C_mn*AngleAxisd(yaw_nm, Vector3d::UnitZ())).transpose()*m_RecentMagMeasurement.mag_strength;
-	m_RecentMagMeasurement.mag_heading = atan2(-b_heading(1), b_heading(0));
+	m_RecentMagMeasurement.mag_heading = atan2(-b_heading(1), b_heading(0)) * 180 / EIGEN_PI;
 
-	double h_ortho = geo.ConvertHeight(state.lat, state.longi, state.height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);
+	double h_ortho = geo.ConvertHeight(state.lat * 180 / EIGEN_PI, state.longi * 180 / EIGEN_PI, state.height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);
 	double delta;
-	SimpleAtmosphere(h_ortho, dummy, delta, dummy);
+	SimpleAtmosphere(h_ortho/1000, dummy, delta, dummy);
 	m_RecentPressTruth = delta*PZERO;
 	m_RecentPressMeasurement = delta*PZERO + sqrt(p_noise_psd)*m_gaussDist(m_rand);
 }
