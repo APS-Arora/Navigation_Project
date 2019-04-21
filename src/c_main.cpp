@@ -928,3 +928,34 @@ void CMain::CalcTrackErr(double elevation_deg){
 
 	m_prrTrackErr = sdTrackErr*m_gaussDist(m_rand);
 }
+
+double* CMain::RadiiCurv(){
+	double radii[2];
+	double R_0 = 6378137; //WGS84 Equatorial radius in meters
+	double e = 0.0818191908425; //WGS84 eccentricity
+
+	double temp = 1 - pow((e * sin(m_UserMotion.lat)), 2);
+	radii[0] = R_0 * (1 - pow(e, 2)) / pow(temp, 1.5);
+	radii[1] = R_0 / sqrt(temp);
+
+	return radii;
+}
+
+void CMain::ErrorsNed(){
+	double* radii;
+	//Calculating the radii of curvature
+	radii = RadiiCurv();
+
+	//Calculating the NED position errors
+	m_IntOutput.delta_pos_ned[0] = (m_INS_States.latitude - m_UserMotion.lat)*(radii[0] + m_UserMotion.height);
+	m_IntOutput.delta_pos_ned[1] = (m_INS_States.longitude - m_UserMotion.longi)*(radii[1] + m_UserMotion.height)*cos(m_UserMotion.lat);
+	m_IntOutput.delta_pos_ned[2] = -(m_INS_States.height - m_UserMotion.height);
+
+	//Calculating NED velocity errors
+	
+	for (int j = 0; j < 3; j++)
+	{
+		m_IntOutput.delta_vel_ned[j] = m_INS_States.velocity[j] - m_UserMotion.user_vel[j];
+	}
+	m_IntOutput.delta_cb_ned = m_INS_States.Cb_n*m_InsOutput->cmat_bn;
+}

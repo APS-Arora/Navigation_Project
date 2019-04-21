@@ -33,9 +33,6 @@ public:
 	void IMU_meas();
 	void SensorRead();
 	void main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *);
-	void INS_Estimate(CMain::INS_States&);
-	void Calc_NED_States(CMain::INS_States&);
-	void InitAttitude(CMain::InsOutput *, CMain::INS_States&);
 	struct CMain::UserMot m_InsUserMotion;
 	struct CMain::InsOutput *m_InsUserOutput = new CMain::InsOutput;
 

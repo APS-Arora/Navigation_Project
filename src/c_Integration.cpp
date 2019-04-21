@@ -10,10 +10,12 @@
 #include <vector>
 #include <Eigen\Dense>
 #include "c_main.h"
+#include <unsupported/Eigen/MatrixFunctions>
 
 
 CInt::CInt()
 {
+	once = true;
 }
 
 
@@ -85,17 +87,18 @@ Vector3d CInt::GravityECEF(Vector3d position){
 	return g;
 }
 
-void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, CMain::INS_States& INS_Init){
+void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& INS_Init){
 
 	//Speed of Light
-	double c = 299792458, omega_ie = 0.00007292115;
+	double c = 299792458, omega_ie = 0.00007292115, azimuth, elevation;
 	Vector4d x_pred = { 0, 0, 0, 0 }, x_est;
 	Matrix<double, Dynamic, 4> H_mat = Matrix<double, Dynamic, 4>::Zero(no_sat, 4);
 	Matrix<double, Dynamic, 3> gnss_pos = Matrix<double, Dynamic, 3>::Zero(no_sat, 3),
 		gnss_vel = Matrix<double, Dynamic, 3>::Zero(no_sat, 3);
 	VectorXd pred_meas = VectorXd::Zero(no_sat), gnss_range = VectorXd::Zero(no_sat), gnss_range_rate = VectorXd::Zero(no_sat);
-	Vector3d delta_r, est_pos, omega, u_as_e;
-	Matrix3d Ce_i, Omega_ie;
+	Vector3d delta_r, est_pos, omega, u_as_e, LOS_ned;
+	Matrix3d Ce_i, Omega_ie, Ce_n = INS_Init.Cb_n*INS_Init.Cb_e.inverse();;
+	CMain::AtmSatDelay delays;
 	double approx_range, range, range_rate;
 	int cnvg = 1;
 
@@ -105,8 +108,9 @@ void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, CMain::INS_States& INS_Init){
 			if (!mp_GpsSatData[j].visible){
 				continue;
 			}
-			gnss_pos(j, 0) = mp_GpsSatData[j].x_cord; gnss_pos(j, 1) = mp_GpsSatData[j].y_cord, gnss_pos(j, 2) = mp_GpsSatData[j].z_cord;
-			gnss_range(j) = mp_GpsSatData[j].range;
+			gnss_pos.row(j) = mp_GpsSatData[j].SatPos;
+			gnss_range(j) = mp_GpsSatData[j].pseudo_range;
+
 			//Predict approx range
 			delta_r = gnss_pos.col(j) - x_pred.head(3);
 			approx_range = delta_r.norm();
@@ -119,7 +123,21 @@ void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, CMain::INS_States& INS_Init){
 			//Predict pseudorange (9.144)
 			delta_r = Ce_i*gnss_pos.col(j) - x_pred.head(3);
 			range = delta_r.norm();
-			pred_meas[j] = range + x_pred(4);
+
+			// Predict Azimuth Elevation
+			LOS_ned = Ce_n*delta_r.normalized();
+			azimuth = atan2(LOS_ned(1), LOS_ned(0));
+			elevation = -asin(LOS_ned(2));
+
+			// Compute Delays
+			m_Delay.ComputeDelays(mp_GpsSatData[j].time_data.time_of_week,
+				mp_GpsSatData[j].time_data.days_in_year,
+				INS_Init.latitude,
+				INS_Init.longitude,
+				INS_Init.height,
+				azimuth, elevation, delays, m_DelayParams);
+
+			pred_meas[j] = range + x_pred(4) + delays.iono_delay_klob + delays.tropo_delay_hop - mp_GpsSatData[j].clock_correction;
 
 			//Predict line of sight and deploy in measurement matrix, (9.144)
 			H_mat.block<1, 3>(j, 0) = -delta_r.transpose() / range;
@@ -150,8 +168,8 @@ void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, CMain::INS_States& INS_Init){
 			if (!mp_GpsSatData[j].visible){
 				continue;
 			}
-			gnss_vel(j, 0) = mp_GpsSatData[j].x_vel; gnss_vel(j, 0) = mp_GpsSatData[j].y_vel; gnss_vel(j, 0) = mp_GpsSatData[j].z_vel;
-			gnss_range_rate(j) = mp_GpsSatData[j].range_rt;
+			gnss_vel.row(j) = mp_GpsSatData[j].SatVel;
+			gnss_range_rate(j) = mp_GpsSatData[j].pseudo_range_rate;
 			//Predict approx range
 			delta_r = gnss_pos.col(j) - x_pred.head(3);
 			approx_range = sqrt(delta_r.transpose()*delta_r);
@@ -189,6 +207,16 @@ void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, CMain::INS_States& INS_Init){
 	//Set outputs to estimates
 	INS_Init.velocity = x_est.head(3);
 	m_ErrorState.clock_drift = x_est(4);
+}
+
+void CInt::run(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output, CMain::InsOutput IMU_Output)
+{
+	if (once)
+	{
+		InitAttitude(&IMU_Output, INS_Estimate);
+		//LsPosVel()
+		once = false;
+	}
 }
 
 void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output)
@@ -285,4 +313,96 @@ void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* G
 	m_ErrorState.accel_bias = Vector3d::Zero();
 	INS_Estimate.gyro_bias = INS_Estimate.gyro_bias - m_ErrorState.gyro_bias;
 	m_ErrorState.gyro_bias = Vector3d::Zero();
+}
+
+void CInt::INS_Estimate(CMain::INS_States& m_INS_States, CMain::InsOutput* m_InsUserOutput)
+{
+	//
+	double alpha_ie = RtEarthRotn_Const*dt;
+	Matrix3d C_Earth = m_TransformMatrix(0, 0, alpha_ie);
+
+	//
+	Vector3d alpha_ib_b = m_InsUserOutput->ang_actual * dt;
+	double mag_alpha = alpha_ib_b.norm();
+	Matrix3d Alpha_ib_b = m_Skew(alpha_ib_b);
+
+	//
+	Matrix3d C_new_old;
+	if (mag_alpha > 1e-8)
+	{
+		C_new_old = Matrix3d::Identity() + sin(mag_alpha) / mag_alpha*Alpha_ib_b + (1 - cos(mag_alpha)) / pow(mag_alpha, 2) * Alpha_ib_b.pow(2.);
+	}
+	else
+	{
+		C_new_old = Matrix3d::Identity() + Alpha_ib_b;
+	}
+
+	//SPECIFIC FORCE FRAME TRANSFORMATION
+	Matrix3d ave_C_b_e;
+	if (mag_alpha > 1e-8)
+	{
+		ave_C_b_e = m_INS_States.Cb_e*(Matrix3d::Identity() + (1 - cos(mag_alpha)) / pow(mag_alpha, 2)*Alpha_ib_b + (1 - sin(mag_alpha) / mag_alpha) / pow(mag_alpha, 2) * Alpha_ib_b.pow(2)) - 0.5*m_Skew(alpha_ie*Vector3d::UnitZ())*m_INS_States.Cb_e;
+	}
+	else
+	{
+		ave_C_b_e = m_INS_States.Cb_e - 0.5*m_Skew(alpha_ie*Vector3d::UnitZ())*m_INS_States.Cb_e;
+	}
+
+	Vector3d f_ib_e = ave_C_b_e*m_InsUserOutput->sf_actual;
+	Vector3d gamma = GravityECEF(m_INS_States.position);
+
+	// ATTITUDE UPDATE
+	m_INS_States.Cb_e = C_Earth*m_INS_States.Cb_e*C_new_old;
+
+	//POSITION UPDATE
+	m_INS_States.position = m_INS_States.position + m_INS_States.velocity*dt + 0.5 * pow(dt, 2) * (f_ib_e + gamma - 2 * m_Skew(RtEarthRotn_Const*Vector3d::UnitZ()) * m_INS_States.velocity);
+
+	// VELOCITY UPDATE
+	m_INS_States.velocity = m_INS_States.velocity + (f_ib_e + gamma - 2 * m_Skew(RtEarthRotn_Const*Vector3d::UnitZ()) * m_INS_States.velocity)*dt;
+
+	this->Calc_NED_States(m_INS_States);
+}
+
+void CInt::Calc_NED_States(CMain::INS_States& m_INS_States)
+{
+	Vector3d r = m_INS_States.position;
+	// CALCULATING LONGITUDE
+	m_INS_States.longitude = atan2(r[1], r[0]);
+
+	double k1 = sqrt(1.0 - pow(Eccentricity_Const, 2.0))*abs(r[2]);
+	double k2 = pow(Eccentricity_Const, 2.0)*EqtRadiusOfEarth_Const;
+	double beta = Vector2d(r[0], r[1]).norm();
+	double E = (k1 - k2) / beta;
+	double F = (k1 + k2) / beta;
+	double P = 4. / 3.*(E*F + 1.);
+	double Q = 2.*(E*E - F*F);
+	double D = pow(P, 3) + pow(Q, 2);
+	double V = pow(sqrt(D) - Q, 1. / 3.) - pow(sqrt(D) + Q, 1. / 3.);
+	double G = 0.5*(sqrt(E*E + V) + E);
+	double T = sqrt(G*G + (F - V * G) / (2 * G - E)) - G;
+
+	// CALCULATING LATITUDE
+	double signlat = (r(2) > 0) - (r(2) < 0);
+	m_INS_States.latitude = signlat* atan((1. - T*T) / (2 * T * sqrt(1 - pow(Eccentricity_Const, 2.0))));
+
+	// CALCULATING HEIGHT
+	double L_b = m_INS_States.latitude;
+	m_INS_States.height = (beta - EqtRadiusOfEarth_Const * T) * cos(L_b) + (r(2) - signlat) * EqtRadiusOfEarth_Const * sqrt(1 - pow(Eccentricity_Const, 2.0)) * sin(L_b);
+
+	// ECEF to NED Transform Matrix
+	Matrix3d Ce_n = m_TransformMatrix(L_b, m_INS_States.longitude);
+
+	// TRANSFORMING VELOCITY TO NED
+	m_INS_States.velocity_n = Ce_n*m_INS_States.velocity;
+
+	// TRANSFORMING ATTITUDE TO NED
+	m_INS_States.Cb_n = Ce_n*m_INS_States.Cb_e;
+}
+
+void CInt::InitAttitude(CMain::InsOutput *m_InsOutput, CMain::INS_States& m_INS_States){
+	Matrix3d delta_Cb_n, est_Cb_n;
+	double deg_to_rad = EIGEN_PI / 180.;
+	delta_Cb_n = m_TransformMatrix(-0.05*deg_to_rad, 0.04*deg_to_rad, 1 * deg_to_rad);
+	est_Cb_n = delta_Cb_n * m_InsOutput->cmat_bn;
+	m_INS_States.Cb_e = m_TransformMatrix(m_INS_States.latitude, m_INS_States.longitude);
 }

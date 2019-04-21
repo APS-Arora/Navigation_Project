@@ -16,7 +16,7 @@
 using namespace std;
 using namespace Eigen;
 
-class CInt
+class CInt : protected CSensor
 {
 public:
 	struct ErrorState
@@ -45,10 +45,14 @@ public:
 
 	CInt();
 	~CInt();
+	void run(CMain::INS_States&, CMain::GNSS_Measurement*, CMain::InsOutput);
 	void m_predict(CMain::INS_States, CMain::InsOutput);
 	void m_correct(CMain::INS_States&, CMain::GNSS_Measurement*);
-	void LsPosVel(CMain::SatData *, CMain::INS_States&);
+	void LsPosVel(CMain::GNSS_Measurement*, CMain::INS_States&);
 	void InitErrorCov();
+	void INS_Estimate(CMain::INS_States&, CMain::InsOutput*);
+	void Calc_NED_States(CMain::INS_States&);
+	void InitAttitude(CMain::InsOutput*, CMain::INS_States&);
 
 protected:
 	double dt;
@@ -58,5 +62,6 @@ protected:
 	// Dependency on CDelayCalc to be removed in future
 	CDelayCalc m_Delay;
 	CMain::DelayCalcParam m_DelayParams;
+	bool once;
 };
 

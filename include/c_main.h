@@ -157,12 +157,19 @@ public:
 	void CalcTrackErr(double elevation_deg);
 	double m_prTrackErr;
 	double m_prrTrackErr;
+	struct IntOutput{
+		double delta_pos_ned[3];
+		double delta_vel_ned[3];
+		Matrix3d delta_cb_ned;
+	} m_IntOutput;
 
 	private:
 		void IrnssTimeOfWeek(string time_of_int);
 		void GpsTimeOfWeek(string time_of_int);
 		void IrnssWeekCrossover();
 		void GpsWeekCrossover();
+		double* RadiiCurv();
+		void ErrorsNed();
 		void ReadUserMotionFile(ifstream& file);
 		double  m_TimeOfIter,
 			m_TimeStep,
@@ -173,8 +180,5 @@ public:
 			m_pseudo_range_irnss[8],
 			m_pseudo_range_rate_irnss[8];
 		static bool end_usermotion_file_flag;
-
-		
-
 };
 
