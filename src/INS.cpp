@@ -33,7 +33,7 @@ INS::~INS()
 
 double INS::NoiseGen(string flag, double rms){
 
-	double gravity = 9.81;
+	double gravity = 9.80665;
 	if (flag == "gyrobias"){
 		// M_PI represents pi (22/7) in _USE_MATH_DEFINES
 		return(rms*M_PI / (180 * 3600)*m_randn());
@@ -119,11 +119,19 @@ void INS::SensorRead(){
 	sensor.close();
 
 	//Computing beta and spectral power density for Gauss-Markov process to be used for computing in-run bias
+
 	m_Sensor.acc_spd = m_Sensor.acc_spd / (9.81 * 1000);
 	m_Sensor.gyro_spd = m_Sensor.gyro_spd / (60 * 180 / M_PI);
+
 	for (int j = 0; j < 3; j++){
-		m_Sensor.acc_beta[j] = 1 / m_Sensor.acc_tc[j];
-		m_Sensor.gyro_beta[j] = 1 / m_Sensor.gyro_tc[j];
+		if (m_Sensor.acc_tc[j]){
+			m_Sensor.acc_beta[j] = 1 / m_Sensor.acc_tc[j];
+			m_Sensor.gyro_beta[j] = 1 / m_Sensor.gyro_tc[j];
+		}
+		else{
+			m_Sensor.acc_beta[j] = 0;
+			m_Sensor.gyro_beta[j] = 0;
+		}
 		m_Sensor.acc_inrun_spd[j] = (m_Sensor.acc_inrun_spd[j] * (1 - m_Sensor.acc_beta[j] * m_step / 2) / m_step) / (9.81 * 1000);
 		m_Sensor.gyro_inrun_spd[j] = (m_Sensor.gyro_inrun_spd[j] * (1 - m_Sensor.gyro_beta[j] * m_step / 2) / m_step) / (60 * 180 / M_PI);
 	}
@@ -189,50 +197,50 @@ void INS::main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *m_InsOutp
 	//Local variables for storing data
 	Vector3d sf_acc = m_TransformMatrix(m_Sensor.acc_orientation[0], m_Sensor.acc_orientation[1], m_Sensor.acc_orientation[2])*sf_ib;
 	Vector3d ang_gyro = m_TransformMatrix(m_Sensor.gyro_orientation[0], m_Sensor.gyro_orientation[1], m_Sensor.gyro_orientation[2])*wb_ib;
-		Vector3d gyro_scale;
+	Vector3d gyro_scale;
 
-		//Computing the errors
-		for (size_t j = 0; j < 3; j++){
-			m_InsUserOutput->acc_bias[j] = m_Sensor.acc_fixbias[j] + m_Sensor.acc_fxbias[j] * sf_acc[0] + m_Sensor.acc_fybias[j] * sf_acc[1]
-				+ m_Sensor.acc_fzbias[j] * sf_acc[2] + m_Sensor.acc_fxsqbias[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.acc_fysqbias[j] * (sf_acc[1] * sf_acc[1])
-				+ m_Sensor.acc_fzsqbias[j] * (sf_acc[2] * sf_acc[2]) + m_Sensor.acc_fxfybias[j] * (sf_acc[0] * sf_acc[1]) +
-				m_Sensor.acc_fyfzbias[j] * (sf_acc[1] * sf_acc[2]) + m_Sensor.acc_fzfxbias[j] * (sf_acc[2] * sf_acc[0]);
-			m_InsUserOutput->acc_scale[j] = m_Sensor.acc_fxscale[j] * sf_acc[0] + m_Sensor.acc_fyscale[j] * sf_acc[1] + m_Sensor.acc_fzscale[j] * sf_acc[2]
-				+ m_Sensor.acc_fxsqscale[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.acc_fysqscale[j] * (sf_acc[1] * sf_acc[1]) + m_Sensor.acc_fzsqscale[j] * (sf_acc[2] * sf_acc[2]);
-			m_InsUserOutput->gyro_bias[j] = m_Sensor.gyro_fixbias[j] + m_Sensor.gyro_fxbias[j] * sf_acc[0] + m_Sensor.gyro_fybias[j] * sf_acc[1]
-				+ m_Sensor.gyro_fzbias[j] * sf_acc[2] + m_Sensor.gyro_fxsqbias[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.gyro_fysqbias[j] * (sf_acc[1] * sf_acc[1])
-				+ m_Sensor.gyro_fzsqbias[j] * (sf_acc[2] * sf_acc[2]) + m_Sensor.gyro_fxfybias[j] * (sf_acc[0] * sf_acc[1]) +
-				m_Sensor.gyro_fyfzbias[j] * (sf_acc[1] * sf_acc[2]) + m_Sensor.gyro_fzfxbias[j] * (sf_acc[2] * sf_acc[0]);
-			gyro_scale[j] = m_Sensor.gyro_fixscale[j] + m_Sensor.gyro_fxscale[j] * sf_acc[0] + m_Sensor.gyro_fyscale[j] * sf_acc[1] + m_Sensor.gyro_fzscale[j] * sf_acc[2]
-				+ m_Sensor.gyro_fxsqscale[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.gyro_fysqscale[j] * (sf_acc[1] * sf_acc[1]) + m_Sensor.gyro_fzsqscale[j] * (sf_acc[2] * sf_acc[2]);
-			m_InsUserOutput->acc_inrun[j] = (1 - (m_Sensor.acc_beta[j] * m_step))*m_InsUserOutput->acc_inrun[j] + sqrt(2 * m_Sensor.acc_beta[j])*(m_Sensor.acc_inrun_spd[j] * m_randn()*m_step);
-			m_InsUserOutput->gyro_inrun[j] = (1 - (m_Sensor.gyro_beta[j] * m_step))*m_InsUserOutput->gyro_inrun[j] + sqrt(2 * m_Sensor.gyro_beta[j])*(m_Sensor.gyro_inrun_spd[j] * m_randn()*m_step);
-			m_InsUserOutput->acc_noise[j] = m_Sensor.acc_spd[j] * m_randn()*m_step;
-			m_InsUserOutput->gyro_noise[j] = m_Sensor.gyro_spd[j] * m_randn()*m_step;
-		}
-		
-		//Isolating the axis misalignment
-		for (size_t j = 0; j < 3; j++)
-		{
-			m_InsUserOutput->acc_misal_error[j] = (m_Sensor.acc_mis_mat*sf_acc - sf_acc)[j];
-		}
+	//Computing the errors
+	for (size_t j = 0; j < 3; j++){
+		m_InsUserOutput->acc_bias[j] = m_Sensor.acc_fixbias[j] + m_Sensor.acc_fxbias[j] * sf_acc[0] + m_Sensor.acc_fybias[j] * sf_acc[1]
+			+ m_Sensor.acc_fzbias[j] * sf_acc[2] + m_Sensor.acc_fxsqbias[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.acc_fysqbias[j] * (sf_acc[1] * sf_acc[1])
+			+ m_Sensor.acc_fzsqbias[j] * (sf_acc[2] * sf_acc[2]) + m_Sensor.acc_fxfybias[j] * (sf_acc[0] * sf_acc[1]) +
+			m_Sensor.acc_fyfzbias[j] * (sf_acc[1] * sf_acc[2]) + m_Sensor.acc_fzfxbias[j] * (sf_acc[2] * sf_acc[0]);
+		m_InsUserOutput->acc_scale[j] = m_Sensor.acc_fxscale[j] * sf_acc[0] + m_Sensor.acc_fyscale[j] * sf_acc[1] + m_Sensor.acc_fzscale[j] * sf_acc[2]
+			+ m_Sensor.acc_fxsqscale[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.acc_fysqscale[j] * (sf_acc[1] * sf_acc[1]) + m_Sensor.acc_fzsqscale[j] * (sf_acc[2] * sf_acc[2]);
+		m_InsUserOutput->gyro_bias[j] = m_Sensor.gyro_fixbias[j] + m_Sensor.gyro_fxbias[j] * sf_acc[0] + m_Sensor.gyro_fybias[j] * sf_acc[1]
+			+ m_Sensor.gyro_fzbias[j] * sf_acc[2] + m_Sensor.gyro_fxsqbias[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.gyro_fysqbias[j] * (sf_acc[1] * sf_acc[1])
+			+ m_Sensor.gyro_fzsqbias[j] * (sf_acc[2] * sf_acc[2]) + m_Sensor.gyro_fxfybias[j] * (sf_acc[0] * sf_acc[1]) +
+			m_Sensor.gyro_fyfzbias[j] * (sf_acc[1] * sf_acc[2]) + m_Sensor.gyro_fzfxbias[j] * (sf_acc[2] * sf_acc[0]);
+		gyro_scale[j] = m_Sensor.gyro_fixscale[j] + m_Sensor.gyro_fxscale[j] * sf_acc[0] + m_Sensor.gyro_fyscale[j] * sf_acc[1] + m_Sensor.gyro_fzscale[j] * sf_acc[2]
+			+ m_Sensor.gyro_fxsqscale[j] * (sf_acc[0] * sf_acc[0]) + m_Sensor.gyro_fysqscale[j] * (sf_acc[1] * sf_acc[1]) + m_Sensor.gyro_fzsqscale[j] * (sf_acc[2] * sf_acc[2]);
+		m_InsUserOutput->acc_inrun[j] = (1 - (m_Sensor.acc_beta[j] * m_step))*m_InsUserOutput->acc_inrun[j] + sqrt(2 * m_Sensor.acc_beta[j])*(m_Sensor.acc_inrun_spd[j] * m_randn()*m_step);
+		m_InsUserOutput->gyro_inrun[j] = (1 - (m_Sensor.gyro_beta[j] * m_step))*m_InsUserOutput->gyro_inrun[j] + sqrt(2 * m_Sensor.gyro_beta[j])*(m_Sensor.gyro_inrun_spd[j] * m_randn()*m_step);
+		m_InsUserOutput->acc_noise[j] = m_Sensor.acc_spd[j] * m_randn() / sqrt(m_step);
+		m_InsUserOutput->gyro_noise[j] = m_Sensor.gyro_spd[j] * m_randn() / sqrt(m_step);
+	}
 
-		Matrix<double, 3, 3> gyro_scale_diag;
-		gyro_scale_diag << gyro_scale[0], 0, 0, 0, gyro_scale[1], 0, 0, 0, gyro_scale[2];
-		Matrix3d gyro_error_mat = m_Sensor.gyro_mis_mat + Matrix3d::Identity() + gyro_scale_diag;
+	//Isolating the axis misalignment
+	for (size_t j = 0; j < 3; j++)
+	{
+		m_InsUserOutput->acc_misal_error[j] = (m_Sensor.acc_mis_mat*sf_acc - sf_acc)[j];
+	}
 
-		//Computing gyro scale factor and misaligment error
-		m_InsUserOutput->gyro_scale_error = gyro_scale_diag*ang_gyro;
-		m_InsUserOutput->gyro_misal_error = m_Sensor.gyro_mis_mat*ang_gyro - ang_gyro;
-		// Adding the error terms to the truth
-		m_InsUserOutput->sf_actual = sf_acc + (m_InsUserOutput->acc_bias + m_InsUserOutput->acc_misal_error + m_InsUserOutput->acc_inrun + m_InsUserOutput->acc_scale + m_InsUserOutput->acc_noise);
-		m_InsUserOutput->ang_actual = ang_gyro + m_InsUserOutput->gyro_bias + gyro_error_mat*ang_gyro + m_InsUserOutput->gyro_inrun + m_InsUserOutput->gyro_noise;
-		//Storing the true Cb_n matrix for use in GPS-INS integration
-		m_InsUserOutput->cmat_bn = cmat_bn;
-		
-		//Copying the data to Cmain object
-		memcpy(m_InsOutput, m_InsUserOutput, sizeof(*m_InsOutput));
-		//return(m_InsUserOutput);
+	Matrix<double, 3, 3> gyro_scale_diag;
+	gyro_scale_diag << gyro_scale[0], 0, 0, 0, gyro_scale[1], 0, 0, 0, gyro_scale[2];
+	Matrix3d gyro_error_mat = m_Sensor.gyro_mis_mat + Matrix3d::Identity() + gyro_scale_diag;
+
+	//Computing gyro scale factor and misaligment error
+	m_InsUserOutput->gyro_scale_error = gyro_scale_diag*ang_gyro;
+	m_InsUserOutput->gyro_misal_error = m_Sensor.gyro_mis_mat*ang_gyro - ang_gyro;
+	// Adding the error terms to the truth
+	m_InsUserOutput->sf_actual = sf_acc + (m_InsUserOutput->acc_bias + m_InsUserOutput->acc_misal_error + m_InsUserOutput->acc_inrun + m_InsUserOutput->acc_scale + m_InsUserOutput->acc_noise);
+	m_InsUserOutput->ang_actual = ang_gyro + m_InsUserOutput->gyro_bias + gyro_error_mat*ang_gyro + m_InsUserOutput->gyro_inrun + m_InsUserOutput->gyro_noise;
+	//Storing the true Cb_n matrix for use in GPS-INS integration
+	m_InsUserOutput->cmat_bn = cmat_bn;
+
+	//Copying the data to Cmain object
+	memcpy(m_InsOutput, m_InsUserOutput, sizeof(*m_InsOutput));
+	//return(m_InsUserOutput);
 }
 
 void INS::INS_Estimate()
