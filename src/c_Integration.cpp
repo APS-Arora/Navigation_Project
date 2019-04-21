@@ -32,7 +32,7 @@ void CInt::InitErrorCov(){
 	ErrorCov(16, 16) = pow(0.1, 2);
 }
 
-void CInt::m_predict(INS::INS_States INS_Estimate, CMain::InsOutput IMU_Output)
+void CInt::m_predict(CMain::INS_States INS_Estimate, CMain::InsOutput IMU_Output)
 {
 	Matrix3d Omega_earth = m_Skew(Vector3d::UnitZ()*RtEarthRotn_Const);
 	double R_0 = EqtRadiusOfEarth_Const, e = Eccentricity_Const;
@@ -85,7 +85,7 @@ Vector3d CInt::GravityECEF(Vector3d position){
 	return g;
 }
 
-void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, INS::INS_States& INS_Init){
+void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, CMain::INS_States& INS_Init){
 
 	//Speed of Light
 	double c = 299792458, omega_ie = 0.00007292115;
@@ -191,7 +191,7 @@ void CInt::LsPosVel(CMain::SatData *mp_GpsSatData, INS::INS_States& INS_Init){
 	m_ErrorState.clock_drift = x_est(4);
 }
 
-void CInt::m_correct(INS::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output)
+void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output)
 {
 	MatrixXd u_as_e_T = MatrixXd::Zero(no_sat, 3), pred_meas = MatrixXd::Zero(no_sat, 2);
 	VectorXd delta_z = VectorXd::Zero(2*no_sat);
@@ -262,7 +262,7 @@ void CInt::m_correct(INS::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS
 	delta_z << delta_z.head(visible_sats), delta_z.segment(no_sat, visible_sats);
 
 	// State Update
-	VectorXd delta_x = K*delta_x;
+	VectorXd delta_x = K*delta_z;
 	m_ErrorState.attitude += delta_x.head(3);
 	m_ErrorState.velocity += delta_x.segment(3, 3);
 	m_ErrorState.position += delta_x.segment(6, 3);

@@ -18,11 +18,6 @@ using namespace Eigen;
 
 class CInt
 {
-	//GNSS Measurements: Sat Pos Vel, Range, Pseudorange and Rates
-	//GNSS Config & Biases
-	//Integrated Solution
-	//State Prop Vector
-	//Covariance Matrix
 public:
 	struct ErrorState
 	{
@@ -50,19 +45,17 @@ public:
 
 	CInt();
 	~CInt();
-	void m_predict(INS::INS_States, CMain::InsOutput);
-	void m_correct(INS::INS_States&, CMain::GNSS_Measurement*);
-	Vector3d GravityECEF(Vector3d position);
-	void LsPosVel(CMain::SatData *, INS::INS_States&);
+	void m_predict(CMain::INS_States, CMain::InsOutput);
+	void m_correct(CMain::INS_States&, CMain::GNSS_Measurement*);
+	void LsPosVel(CMain::SatData *, CMain::INS_States&);
 	void InitErrorCov();
-	//LeastSquare();
-	//GPSPosVel();
-	//KalmanFilter();
-	//MainFunction();
+
 protected:
 	double dt;
+	Vector3d GravityECEF(Vector3d position);
 	Matrix3d m_Skew(Vector3d);
 	int no_sat;
+	// Dependency on CDelayCalc to be removed in future
 	CDelayCalc m_Delay;
 	CMain::DelayCalcParam m_DelayParams;
 };

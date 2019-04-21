@@ -53,6 +53,14 @@ public:
 		Matrix3d cmat_bn;
 	};
 	InsOutput *m_InsOutput = new InsOutput;
+
+	struct INS_States
+	{
+		Vector3d position, velocity, velocity_n, accel_bias, gyro_bias;
+		Matrix3d Cb_e, Cb_n;
+		double latitude, longitude, height;
+	} m_INS_States;
+
 	struct TimeVar{
 
 		unsigned int  week_no,

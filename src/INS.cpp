@@ -243,7 +243,7 @@ void INS::main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *m_InsOutp
 	//return(m_InsUserOutput);
 }
 
-void INS::INS_Estimate()
+void INS::INS_Estimate(CMain::INS_States& m_INS_States)
 {
 	//
 	double alpha_ie = RtEarthRotn_Const*m_step;
@@ -288,10 +288,10 @@ void INS::INS_Estimate()
 	// VELOCITY UPDATE
 	m_INS_States.velocity = m_INS_States.velocity + (f_ib_e + gamma - 2 * m_Skew(RtEarthRotn_Const*Vector3d::UnitZ()) * m_INS_States.velocity)*m_step;
 
-	this->Calc_NED_States();
+	this->Calc_NED_States(m_INS_States);
 }
 
-void INS::Calc_NED_States()
+void INS::Calc_NED_States(CMain::INS_States& m_INS_States)
 {
 	Vector3d r = m_INS_States.position;
 	// CALCULATING LONGITUDE
@@ -327,7 +327,7 @@ void INS::Calc_NED_States()
 	m_INS_States.Cb_n = Ce_n*m_INS_States.Cb_e;
 }
 
-void INS::InitAttitude(CMain::InsOutput *m_InsOutput){
+void INS::InitAttitude(CMain::InsOutput *m_InsOutput, CMain::INS_States& m_INS_States){
 	Matrix3d delta_Cb_n, est_Cb_n;
 	double deg_to_rad = EIGEN_PI / 180.;
 	delta_Cb_n = m_TransformMatrix(-0.05*deg_to_rad, 0.04*deg_to_rad, 1 * deg_to_rad);

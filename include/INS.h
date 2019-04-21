@@ -33,17 +33,12 @@ public:
 	void IMU_meas();
 	void SensorRead();
 	void main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *);
-	void INS_Estimate();
-	void Calc_NED_States();
-	void InitAttitude(CMain::InsOutput *);
+	void INS_Estimate(CMain::INS_States&);
+	void Calc_NED_States(CMain::INS_States&);
+	void InitAttitude(CMain::InsOutput *, CMain::INS_States&);
 	struct CMain::UserMot m_InsUserMotion;
 	struct CMain::InsOutput *m_InsUserOutput = new CMain::InsOutput;
-	struct INS_States
-	{
-		Vector3d position, velocity, velocity_n, accel_bias,gyro_bias;
-		Matrix3d Cb_e, Cb_n;
-		double latitude, longitude, height;
-	} m_INS_States;
+
 	struct SensorData {
 		SensorData() : acc_orientation(3), gyro_orientation(3), acc_misal(3), gyro_misal(3) {}
 		vector<double> acc_orientation, gyro_orientation, acc_misal, gyro_misal;
