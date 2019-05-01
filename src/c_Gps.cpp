@@ -133,10 +133,12 @@ void CGps::GpsSat(struct TimeVar m_TVar, struct UserMot m_UserMotion, struct Sat
 		{
 			mp_GpsSat[gps_sat_id].clock_correction = SpeedLight_Const*(mp_Yuma[gps_sat_id].af0s + mp_Yuma[gps_sat_id].af1s *
 				(int(m_GpsTVar.time_of_day) % 7200));
+			mp_GpsSat[gps_sat_id].visible = true;
 		}
 		else
 		{
 			mp_GpsSat[gps_sat_id].clock_correction = 0;
+			mp_GpsSat[gps_sat_id].visible = false;
 		}
 
 		/*

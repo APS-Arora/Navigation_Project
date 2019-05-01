@@ -160,7 +160,7 @@ public:
 	struct IntOutput{
 		double delta_pos_ned[3];
 		double delta_vel_ned[3];
-		Matrix3d delta_cb_ned;
+		double delta_eul_ned[3];
 	} m_IntOutput;
 
 	private:
@@ -168,15 +168,13 @@ public:
 		void GpsTimeOfWeek(string time_of_int);
 		void IrnssWeekCrossover();
 		void GpsWeekCrossover();
-		double* RadiiCurv();
+		void RadiiCurv(double*);
 		void ErrorsNed();
 		void ReadUserMotionFile(ifstream& file);
 		double  m_TimeOfIter,
 			m_TimeStep,
 			m_TimeIntoRun,
 			m_TimeIntoRunHr,
-			m_pseudo_range[31],
-			m_pseudo_range_rate[31],
 			m_pseudo_range_irnss[8],
 			m_pseudo_range_rate_irnss[8];
 		static bool end_usermotion_file_flag;

@@ -52,28 +52,29 @@ void COtherSensors::m_ReadConfigFromFile(string config_file_name)
 void COtherSensors::m_Measure(CMain::TimeVar time, CMain::UserMot state)
 {
 	Eigen::Matrix3d C_mn = C_mb*m_TransformMatrix(state.roll,state.pitch,state.yaw);
-	double decyear = time.year + (time.days_in_year + time.time_of_day / 86400) / (365 + ((time.year % 4) ? 0 : 1));
+	double decyear = time.year + (time.days_in_year - 1. + time.time_of_day / 86400.) / (365. + ((time.year % 4) ? 0. : 1.));
 	Eigen::Vector3d b_earth,b_local,b_heading;
 	double Bx, By, Bz;
-	mag(decyear, state.lat * 180 / EIGEN_PI, state.longi * 180 / EIGEN_PI, state.height, Bx, By, Bz);
-	b_earth << Bx, By, Bz;
-	b_earth /= 100;
+	mag(decyear, state.lat * 180. / EIGEN_PI, state.longi * 180. / EIGEN_PI, state.height, Bx, By, Bz);
+	// ENU to NED Components Conversion
+	b_earth << By, Bx, -Bz;
+	b_earth /= 100.;
 	b_local << m_gaussDist(m_rand), m_gaussDist(m_rand), m_gaussDist(m_rand);
 	b_local = (b_local_psd.cwiseSqrt()).cwiseProduct(b_local);
 
 	m_RecentMagMeasurement.mag_strength = b_hard + (Eigen::Matrix3d::Identity() + M_soft)*C_mn*(b_earth + b_local);
 	m_RecentMagTruth.mag_strength = C_mn*b_earth;
 
-	double yaw_nm = atan2(C_mn(0, 1), C_mn(0, 0))* 180 / EIGEN_PI;
+	double yaw_nm = atan2(C_mn(0, 1), C_mn(0, 0))* 180. / EIGEN_PI;
 	double declination, dummy;
 	GeographicLib::MagneticModel::FieldComponents(Bx, By, Bz, dummy, dummy, declination, dummy);
 	m_RecentMagTruth.mag_heading = yaw_nm - declination;
 	b_heading = (C_mn*AngleAxisd(yaw_nm, Vector3d::UnitZ())).transpose()*m_RecentMagMeasurement.mag_strength;
-	m_RecentMagMeasurement.mag_heading = atan2(-b_heading(1), b_heading(0)) * 180 / EIGEN_PI;
+	m_RecentMagMeasurement.mag_heading = atan2(-b_heading(1), b_heading(0)) * 180. / EIGEN_PI;
 
-	double h_ortho = geo.ConvertHeight(state.lat * 180 / EIGEN_PI, state.longi * 180 / EIGEN_PI, state.height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);
+	double h_ortho = geo.ConvertHeight(state.lat * 180. / EIGEN_PI, state.longi * 180. / EIGEN_PI, state.height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);
 	double delta;
-	SimpleAtmosphere(h_ortho/1000, dummy, delta, dummy);
+	SimpleAtmosphere(h_ortho/1000., dummy, delta, dummy);
 	m_RecentPressTruth = delta*PZERO;
 	m_RecentPressMeasurement = delta*PZERO + sqrt(p_noise_psd)*m_gaussDist(m_rand);
 }

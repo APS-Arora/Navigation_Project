@@ -50,6 +50,7 @@ double INS::NoiseGen(string flag, double rms){
 	if (flag == "misal"){
 		return(rms / 1000 * m_randn());
 	}
+	else return 0;
 }
 
 Vector3d INS::GravityECEF(Vector3d position){
@@ -190,7 +191,7 @@ void INS::main_function(CMain::UserMot m_UserMotion, CMain::InsOutput *m_InsOutp
 	IMU_meas();
 
 	//Function call to read sensor file
-	if (m_turn == true)
+	if (m_turn)
 	{
 		SensorRead();
 	}

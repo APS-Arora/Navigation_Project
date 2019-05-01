@@ -19,6 +19,7 @@
 #include "ConstVar.h"
 #include "CDelayCalc.h"
 #include "COtherSensors.h"
+#include "c_Integration.h"
 
 CMain::CMain()
 {
@@ -64,7 +65,7 @@ CMain::CMain()
 	m_CarrDisc.bandwidth = 2;
 	m_CarrDisc.d = NULL;
 	m_CarrDisc.tau_a = 0.01;
-	f_ca = 1.023*pow(10, 6);
+	f_ca = 1575.42*pow(10, 6); // Carrier Frequency corressponding to GPS L1 Band. There is problem here. What to do for IRNSS?
 	m_CarrDisc.type = "FLL"; // Permissable Carrier Discriminator types: Costas, PLL, FLL
 }
 
@@ -111,6 +112,9 @@ int CMain::MainFunc()
 	// Output code for INS
 	ofstream ofile_ins("ins_output.csv", ios::out | ios::trunc);
 	ofile_ins << "Specific_Force_X" << ',' << "Specific_Force_Y" << ',' << "Specific_Force_Z" << ',' << "Angular Rate_X" << ',' << "Angular Rate_Y" << ',' << "Angular Rate_Z" << '\n';
+
+	//Output file for Integration
+	ofstream ofile_int("output_integration.csv");
 
 	// Output File for Barometric Altimeter and Magnetometer
 	ofstream ofile_osensors("sensed_output_other_sensors.csv");
@@ -197,6 +201,9 @@ int CMain::MainFunc()
 
 	// Create object for Other Sensors
 	COtherSensors os_obj("OtherSensorsConfig.csv");
+
+	//Creating integration class object
+	CInt int_obj;
 
 	int time_iter = 0;
 
@@ -300,9 +307,21 @@ int CMain::MainFunc()
 			CalcTrackErr(abs(mp_GpsSatData[gps_sat_id].elevation)*180.0 / Pi_Const);
 
 			// Calculate pseudo range and pseudo range rate		
-				m_pseudo_range[gps_sat_id] = mp_GpsSatData[gps_sat_id].range + m_DelayCalc.iono_delay_klob + m_DelayCalc.tropo_delay_hop -
+			m_GPS_measurements[gps_sat_id].pseudo_range = mp_GpsSatData[gps_sat_id].range + m_DelayCalc.iono_delay_klob + m_DelayCalc.tropo_delay_hop -
 					mp_GpsSatData[gps_sat_id].clock_correction + SpeedLight_Const*m_UserErr(0, 0) + m_prTrackErr;
-				m_pseudo_range_rate[gps_sat_id] = mp_GpsSatData[gps_sat_id].range_rt + SpeedLight_Const*m_UserErr(1, 0) + m_prrTrackErr;
+
+			m_GPS_measurements[gps_sat_id].pseudo_range_rate = mp_GpsSatData[gps_sat_id].range_rt + SpeedLight_Const*m_UserErr(1, 0) + m_prrTrackErr;
+
+			// Preparing GPS Measurements for Integration Filter
+			m_GPS_measurements[gps_sat_id].SatPos << mp_GpsSatData[gps_sat_id].x_cord, mp_GpsSatData[gps_sat_id].y_cord, mp_GpsSatData[gps_sat_id].z_cord;
+
+			m_GPS_measurements[gps_sat_id].SatVel << mp_GpsSatData[gps_sat_id].x_vel, mp_GpsSatData[gps_sat_id].y_vel, mp_GpsSatData[gps_sat_id].z_vel;
+
+			m_GPS_measurements[gps_sat_id].time_data = m_GpsTimeData;
+			
+			m_GPS_measurements[gps_sat_id].clock_correction = mp_GpsSatData[gps_sat_id].clock_correction;
+
+			m_GPS_measurements[gps_sat_id].visible = mp_GpsSatData[gps_sat_id].visible;
 
 			// Write output for the GPS data
 			ofile_gps << mp_GpsSatData[gps_sat_id].x_cord << "  ";
@@ -316,8 +335,8 @@ int CMain::MainFunc()
 			ofile_gps << mp_GpsSatData[gps_sat_id].azimuth << "  ";
 			ofile_gps << mp_GpsSatData[gps_sat_id].elevation << "  ";
 			ofile_gps << m_TimeIntoRunHr << "  ";
-			ofile_gps << m_pseudo_range[gps_sat_id] << "  ";
-			ofile_gps << m_pseudo_range_rate[gps_sat_id] << "  ";
+			ofile_gps << m_GPS_measurements[gps_sat_id].pseudo_range << "  ";
+			ofile_gps << m_GPS_measurements[gps_sat_id].pseudo_range_rate << "  ";
 			ofile_gps << mp_GpsSatData[gps_sat_id].clock_correction << endl;
 
 
@@ -334,7 +353,7 @@ int CMain::MainFunc()
 	
 		
 		//Function call from IRNSS class
-		c_Irnss_obj.IrnssSat(m_IrnssTimeData, m_UserMotion, mp_IrnssSatData, mp_IrnssTransTime);
+		c_Irnss_obj.IrnssSat(m_IrnssTimeData, m_UserMotion, mp_IrnssSatData, mp_IrnssTransTime); // This function does not update visibility information
 
 		// Write output for the IRNSS data
 		for (int irnss_sat_id = 0; irnss_sat_id < MaxIrnssSat_Const; irnss_sat_id++)
@@ -385,7 +404,17 @@ int CMain::MainFunc()
 			ofile_track_error << m_prTrackErr << " " << m_prrTrackErr << endl;
 		}
 		
-		
+		//Implementing the main function of CInt
+		int_obj.run(m_INS_States, m_GPS_measurements, *m_InsOutput);
+
+		//Converting errors to NED
+		ErrorsNed();
+
+		//Writing errors
+		ofile_int << m_IntOutput.delta_pos_ned[0] << comma << m_IntOutput.delta_pos_ned[1] << comma << m_IntOutput.delta_pos_ned[2] << comma;
+		ofile_int << m_IntOutput.delta_vel_ned[0] << comma << m_IntOutput.delta_vel_ned[1] << comma << m_IntOutput.delta_vel_ned[2] << comma;
+		ofile_int << m_IntOutput.delta_eul_ned[0] << comma << m_IntOutput.delta_eul_ned[1] << comma << m_IntOutput.delta_eul_ned[2] << endl;
+
 
 		//Increase the time of week by the time step after each iteration
 		m_GpsTimeData.time_of_week = m_GpsTimeData.time_of_week + m_TimeStep;
@@ -909,6 +938,11 @@ void CMain::CalcClockError(){
 void CMain::CalcTrackErr(double elevation_deg){
 	
 	double sdTrackErr;
+	if (elevation_deg < m_DelayPram.mask_angle)
+	{
+		m_prTrackErr = m_prrTrackErr = 0;
+		return;
+	}
 	c_n0 = pow(10, 2.0) + ((pow(10, 4.5) - pow(10, 2.0)) / (75 - 5))*(elevation_deg-5);
 
 	if (m_CodeDisc.type == "DPP")
@@ -929,8 +963,7 @@ void CMain::CalcTrackErr(double elevation_deg){
 	m_prrTrackErr = sdTrackErr*m_gaussDist(m_rand);
 }
 
-double* CMain::RadiiCurv(){
-	double radii[2];
+void CMain::RadiiCurv(double* radii){
 	double R_0 = 6378137; //WGS84 Equatorial radius in meters
 	double e = 0.0818191908425; //WGS84 eccentricity
 
@@ -938,13 +971,12 @@ double* CMain::RadiiCurv(){
 	radii[0] = R_0 * (1 - pow(e, 2)) / pow(temp, 1.5);
 	radii[1] = R_0 / sqrt(temp);
 
-	return radii;
 }
 
 void CMain::ErrorsNed(){
-	double* radii;
+	double radii[2]; Matrix3d delta_cb_ned;
 	//Calculating the radii of curvature
-	radii = RadiiCurv();
+	RadiiCurv(radii);
 
 	//Calculating the NED position errors
 	m_IntOutput.delta_pos_ned[0] = (m_INS_States.latitude - m_UserMotion.lat)*(radii[0] + m_UserMotion.height);
@@ -957,5 +989,10 @@ void CMain::ErrorsNed(){
 	{
 		m_IntOutput.delta_vel_ned[j] = m_INS_States.velocity[j] - m_UserMotion.user_vel[j];
 	}
-	m_IntOutput.delta_cb_ned = m_INS_States.Cb_n*m_InsOutput->cmat_bn;
+	delta_cb_ned = m_INS_States.Cb_n*m_InsOutput->cmat_bn;
+
+	//CTM to Euler conversion
+	m_IntOutput.delta_eul_ned[0] = atan2(delta_cb_ned(1, 2), delta_cb_ned(2, 2));
+	m_IntOutput.delta_eul_ned[1] = -asin(delta_cb_ned(0, 2));
+	m_IntOutput.delta_eul_ned[2] = atan2(delta_cb_ned(0, 1), delta_cb_ned(0, 0));
 }

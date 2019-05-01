@@ -16,6 +16,7 @@
 CInt::CInt()
 {
 	once = true;
+	no_sat = 31;
 }
 
 
@@ -25,11 +26,12 @@ CInt::~CInt()
 
 void CInt::InitErrorCov(){
 	double mg_ms2 = 0.00000980665, deg_to_rad = 0.01745329252;
+	ErrorCov = MatrixXd::Zero(17, 17);
 	ErrorCov.topLeftCorner(3, 3) = Matrix3d::Identity()*pow(0.0001, 2);
 	ErrorCov.block(3, 3, 3, 3) = Matrix3d::Identity()*pow(0.1, 2);
-	ErrorCov.block(3, 3, 6, 6) = Matrix3d::Identity()*pow(10, 2);
-	ErrorCov.block(3, 3, 9, 9) = Matrix3d::Identity()*pow(1000 * mg_ms2, 2);
-	ErrorCov.block(3, 3, 12, 12) = Matrix3d::Identity()*pow(10 * deg_to_rad / 3600, 2);
+	ErrorCov.block(6, 6, 3, 3) = Matrix3d::Identity()*pow(10, 2);
+	ErrorCov.block(9, 9, 3, 3) = Matrix3d::Identity()*pow(1000 * mg_ms2, 2);
+	ErrorCov.block(12, 12, 3, 3) = Matrix3d::Identity()*pow(10 * deg_to_rad / 3600, 2);
 	ErrorCov(15, 15) = pow(10, 2);
 	ErrorCov(16, 16) = pow(0.1, 2);
 }
@@ -93,12 +95,12 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 	double c = 299792458, omega_ie = 0.00007292115, azimuth, elevation;
 	Vector4d x_pred = { 0, 0, 0, 0 }, x_est;
 	Matrix<double, Dynamic, 4> H_mat = Matrix<double, Dynamic, 4>::Zero(no_sat, 4);
-	Matrix<double, Dynamic, 3> gnss_pos = Matrix<double, Dynamic, 3>::Zero(no_sat, 3),
-		gnss_vel = Matrix<double, Dynamic, 3>::Zero(no_sat, 3);
+	Matrix<double, 3, Dynamic> gnss_pos = Matrix<double, 3, Dynamic>::Zero(3, no_sat),
+		gnss_vel = Matrix<double, 3, Dynamic>::Zero(3, no_sat);
 	VectorXd pred_meas = VectorXd::Zero(no_sat), gnss_range = VectorXd::Zero(no_sat), gnss_range_rate = VectorXd::Zero(no_sat);
-	Vector3d delta_r, est_pos, omega, u_as_e, LOS_ned;
-	Matrix3d Ce_i, Omega_ie, Ce_n = INS_Init.Cb_n*INS_Init.Cb_e.inverse();;
-	CMain::AtmSatDelay delays;
+	Vector3d delta_r, est_pos, omega, u_as_e;//, LOS_ned;
+	Matrix3d Ce_i, Omega_ie; //Ce_n = INS_Init.Cb_n*INS_Init.Cb_e.inverse();
+	//CMain::AtmSatDelay delays;
 	double approx_range, range, range_rate;
 	int cnvg = 1;
 
@@ -108,7 +110,7 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 			if (!mp_GpsSatData[j].visible){
 				continue;
 			}
-			gnss_pos.row(j) = mp_GpsSatData[j].SatPos;
+			gnss_pos.col(j) = mp_GpsSatData[j].SatPos;
 			gnss_range(j) = mp_GpsSatData[j].pseudo_range;
 
 			//Predict approx range
@@ -124,6 +126,7 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 			delta_r = Ce_i*gnss_pos.col(j) - x_pred.head(3);
 			range = delta_r.norm();
 
+			/*
 			// Predict Azimuth Elevation
 			LOS_ned = Ce_n*delta_r.normalized();
 			azimuth = atan2(LOS_ned(1), LOS_ned(0));
@@ -136,8 +139,11 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 				INS_Init.longitude,
 				INS_Init.height,
 				azimuth, elevation, delays, m_DelayParams);
+			*/
 
-			pred_meas[j] = range + x_pred(4) + delays.iono_delay_klob + delays.tropo_delay_hop - mp_GpsSatData[j].clock_correction;
+			pred_meas[j] = range + x_pred(4);
+
+			//pred_meas[j] = range + x_pred(4) + delays.iono_delay_klob + delays.tropo_delay_hop - mp_GpsSatData[j].clock_correction;
 
 			//Predict line of sight and deploy in measurement matrix, (9.144)
 			H_mat.block<1, 3>(j, 0) = -delta_r.transpose() / range;
@@ -168,7 +174,7 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 			if (!mp_GpsSatData[j].visible){
 				continue;
 			}
-			gnss_vel.row(j) = mp_GpsSatData[j].SatVel;
+			gnss_vel.col(j) = mp_GpsSatData[j].SatVel;
 			gnss_range_rate(j) = mp_GpsSatData[j].pseudo_range_rate;
 			//Predict approx range
 			delta_r = gnss_pos.col(j) - x_pred.head(3);
@@ -209,14 +215,20 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 	m_ErrorState.clock_drift = x_est(4);
 }
 
-void CInt::run(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output, CMain::InsOutput IMU_Output)
+void CInt::run(CMain::INS_States& INS_Estimates, CMain::GNSS_Measurement* GPS_Output, CMain::InsOutput IMU_Output)
 {
 	if (once)
 	{
-		InitAttitude(&IMU_Output, INS_Estimate);
-		//LsPosVel()
+		LsPosVel(GPS_Output, INS_Estimates);
+		Calc_NED_States(INS_Estimates);
+		InitAttitude(&IMU_Output, INS_Estimates);
+		InitErrorCov();
 		once = false;
 	}
+	INS_Estimate(INS_Estimates, &IMU_Output);
+	//m_predict(INS_Estimates, IMU_Output);
+	//m_correct(INS_Estimates, GPS_Output);
+	Calc_NED_States(INS_Estimates);
 }
 
 void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output)
@@ -404,5 +416,5 @@ void CInt::InitAttitude(CMain::InsOutput *m_InsOutput, CMain::INS_States& m_INS_
 	double deg_to_rad = EIGEN_PI / 180.;
 	delta_Cb_n = m_TransformMatrix(-0.05*deg_to_rad, 0.04*deg_to_rad, 1 * deg_to_rad);
 	est_Cb_n = delta_Cb_n * m_InsOutput->cmat_bn;
-	m_INS_States.Cb_e = m_TransformMatrix(m_INS_States.latitude, m_INS_States.longitude);
+	m_INS_States.Cb_e = m_TransformMatrix(m_INS_States.latitude, m_INS_States.longitude).transpose()*est_Cb_n;
 }
