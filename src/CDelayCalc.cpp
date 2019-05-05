@@ -116,6 +116,11 @@ void CDelayCalc::ComputeDelays(double time_of_week,
 		m_AtmDelayCalc.tropo_delay_hop = 0;
 		m_AtmDelayCalc.iono_delay_klob = 0;
 	}
+	// If above troposphere, delay is zero
+	if (m_Height > 20000)
+	{
+		m_AtmDelayCalc.tropo_delay_hop = 0;
+	}
 	
 	m_DelayCalc.iono_delay_klob = m_AtmDelayCalc.iono_delay_klob;
 	m_DelayCalc.tropo_delay_hop = m_AtmDelayCalc.tropo_delay_hop;

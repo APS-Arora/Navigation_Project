@@ -203,7 +203,7 @@ int CMain::MainFunc()
 	COtherSensors os_obj("OtherSensorsConfig.csv");
 
 	//Creating integration class object
-	CInt int_obj;
+	CInt int_obj(m_DelayPram);
 
 	int time_iter = 0;
 
@@ -753,7 +753,7 @@ void CMain::ReadUserMotionFile(ifstream& file)
 
 		// Read user acceleration
 		getline(file, param, ',');
-		m_UserMotion.user_acc[0];
+		m_UserMotion.user_acc[0] = stod(param);
 		getline(file, param, ',');
 		m_UserMotion.user_acc[1] = stod(param);
 		getline(file, param, ',');

@@ -43,11 +43,11 @@ public:
 				pseudo_range_rate_PSD;
 	} m_NoiseConfig;
 
-	CInt();
+	CInt(CMain::DelayCalcParam);
 	~CInt();
 	void run(CMain::INS_States&, CMain::GNSS_Measurement*, CMain::InsOutput);
-	void m_predict(CMain::INS_States, CMain::InsOutput);
-	void m_correct(CMain::INS_States&, CMain::GNSS_Measurement*);
+	void Predict(CMain::INS_States, CMain::InsOutput);
+	void Correct(CMain::INS_States&, CMain::GNSS_Measurement*);
 	void LsPosVel(CMain::GNSS_Measurement*, CMain::INS_States&);
 	void InitErrorCov();
 	void INS_Estimate(CMain::INS_States&, CMain::InsOutput*);

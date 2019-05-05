@@ -1,5 +1,15 @@
+/********************************************************************************************************
+* Description            : Implementation of Tightly Coupled Error State Kalman Filter
+* Specific library calls :	1) Using CDelayCalc for delay calculations
+* Classes                : COtherSensors
+* Assumptions            :  1) Satellite Position and Velocity must be provided to LsPosiVel and Correct. This is to be replaced by ephemeris in future with satellite position, vel calculations to be done inside the class.
+							2) LsPosiVel does not correct pseudoranges for tropo and iono delay. Correct does it though.
+* Reference              : 1. Chapter 12, Paul D Grooves : Principles of GNSS, Inertial, and Multisensor Integrated Navigation System(2008)
+*
+* Version History        :
+* <1.1><Amanpreetsingh><02/03/2019>
+***********************************************************************************************************/
 #include "c_Integration.h"
-
 #include <iostream>
 #include <string>
 #include <random>
@@ -13,10 +23,28 @@
 #include <unsupported/Eigen/MatrixFunctions>
 
 
-CInt::CInt()
+CInt::CInt(CMain::DelayCalcParam InputDelayParams)
 {
 	once = true;
 	no_sat = 31;
+
+	m_NoiseConfig.accel_PSD = pow(200 * 9.80665e-6,2.0);
+	m_NoiseConfig.gyro_PSD = pow((0.02 * EIGEN_PI/180 / 60), 2.0);
+	m_NoiseConfig.accel_bias_PSD = 1.0E-7;
+	m_NoiseConfig.gyro_bias_PSD = 2.0E-12;
+	m_NoiseConfig.clock_drift_PSD = 1;
+	m_NoiseConfig.clock_offset_PSD = 1;
+	m_NoiseConfig.pseudo_range_PSD = 2.5;
+	m_NoiseConfig.pseudo_range_rate_PSD = 0.1;
+
+	m_ErrorState.attitude = Vector3d::Zero();
+	m_ErrorState.velocity = Vector3d::Zero();
+	m_ErrorState.position = Vector3d::Zero();
+	m_ErrorState.accel_bias = Vector3d::Zero();
+	m_ErrorState.gyro_bias = Vector3d::Zero();
+
+	dt = 0.1;
+	m_DelayParams = InputDelayParams;
 }
 
 
@@ -35,8 +63,19 @@ void CInt::InitErrorCov(){
 	ErrorCov(15, 15) = pow(10, 2);
 	ErrorCov(16, 16) = pow(0.1, 2);
 }
-
-void CInt::m_predict(CMain::INS_States INS_Estimate, CMain::InsOutput IMU_Output)
+/********************************************************************************************************
+* Function               : Predict
+* Description            : Prediction Step for Error State Kalman Filter
+* Function Parameter     : None
+* Return value           : None
+* Specific library calls : None
+* Functions called       : None
+* Assumptions            : None
+* Reference              : None
+* Version History        :
+* <1.1><Amanpreetsingh><02/03/2019>
+***********************************************************************************************************/
+void CInt::Predict(CMain::INS_States INS_Estimate, CMain::InsOutput IMU_Output)
 {
 	Matrix3d Omega_earth = m_Skew(Vector3d::UnitZ()*RtEarthRotn_Const);
 	double R_0 = EqtRadiusOfEarth_Const, e = Eccentricity_Const;
@@ -48,11 +87,19 @@ void CInt::m_predict(CMain::INS_States INS_Estimate, CMain::InsOutput IMU_Output
 	m_ErrorState.clock_offset += m_ErrorState.clock_drift*dt;
 
 	// Calculating State Transition Matrix
-	Matrix3d Fe21 = -m_Skew(INS_Estimate.Cb_e*corr_sf);
-	double geocentric_radius = R_0 / sqrt(1 - pow(e * sin(INS_Estimate.latitude), 2.)) *sqrt(pow(cos(INS_Estimate.latitude), 2.) + pow(1 - e*e,2.) * pow(sin(INS_Estimate.latitude), 2.));
-	Matrix3d Fe23 = 2 * GravityECEF(INS_Estimate.position) / geocentric_radius*INS_Estimate.position.normalized().transpose();
-	Matrix<double, 17, 17> Phi;
-	Phi << -Omega_earth, MatrixXd::Zero(3, 9), INS_Estimate.Cb_e, MatrixXd::Zero(3, 2), Fe21, -2 * Omega_earth, Fe23, INS_Estimate.Cb_e, Matrix3d::Zero(), MatrixXd::Zero(3, 2), Matrix3d::Zero(), Matrix3d::Identity(), MatrixXd::Zero(3, 17), MatrixXd::Zero(6, 17), MatrixXd::Zero(2, 15), Vector2d(1,0).asDiagonal();
+	double geocentric_radius = R_0 / sqrt(1 - pow(e * sin(INS_Estimate.latitude), 2.)) *sqrt(pow(cos(INS_Estimate.latitude), 2.) + pow(1 - e*e, 2.) * pow(sin(INS_Estimate.latitude), 2.));
+	Matrix<double, 17, 17> Phi = Matrix<double, 17, 17>::Zero();
+	Phi.block(0, 0, 3, 3) = -Omega_earth;
+	Phi.block(0, 12, 3, 3) = INS_Estimate.Cb_e;
+	Phi.block(3, 0, 3, 3) = -m_Skew(INS_Estimate.Cb_e*corr_sf);
+	Phi.block(3, 3, 3, 3) = -2 * Omega_earth;
+	Phi.block(3, 6, 3, 3) = 2 * GravityECEF(INS_Estimate.position) / geocentric_radius*INS_Estimate.position.normalized().transpose();
+	Phi.block(3, 9, 3, 3) = INS_Estimate.Cb_e;
+	Phi.block(6, 3, 3, 3) = Matrix3d::Identity();
+	Phi(15, 16) = 1;
+	/*Phi << -Omega_earth, MatrixXd::Zero(3, 9), INS_Estimate.Cb_e, MatrixXd::Zero(3, 2), Fe21, -2 * Omega_earth, Fe23, INS_Estimate.Cb_e, 
+			Matrix3d::Zero(), MatrixXd::Zero(3, 2), Matrix3d::Zero(), Matrix3d::Identity(), MatrixXd::Zero(3, 11), MatrixXd::Zero(6, 17), 
+			MatrixXd::Zero(2, 15), Vector2d(1,0).asDiagonal();*/
 	Phi = Matrix<double, 17, 17>::Identity() + Phi*dt;
 
 	// Calculating Process Noise Covariance
@@ -82,8 +129,8 @@ Vector3d CInt::GravityECEF(Vector3d position){
 		z_scale = 5 * pow(position[2] / mag_r, 2);
 		vec << (1 - z_scale)*position[0], (1 - z_scale)*position[1], (3 - z_scale)*position[2];
 		gamma = -GMProd_Const / pow(mag_r, 3)*(position + 1.5*J_2*pow(EqtRadiusOfEarth_Const / mag_r, 2)*vec);
-		g[0] = gamma[0] + RtEarthRotn_Const*position[0];
-		g[1] = gamma[1] + RtEarthRotn_Const*position[1];
+		g[0] = gamma[0] + pow(RtEarthRotn_Const,2.0)*position[0];
+		g[1] = gamma[1] + pow(RtEarthRotn_Const,2.0)*position[1];
 		g[2] = gamma[2];
 	}
 	return g;
@@ -141,13 +188,13 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 				azimuth, elevation, delays, m_DelayParams);
 			*/
 
-			pred_meas[j] = range + x_pred(4);
+			pred_meas[j] = range + x_pred(3);
 
 			//pred_meas[j] = range + x_pred(4) + delays.iono_delay_klob + delays.tropo_delay_hop - mp_GpsSatData[j].clock_correction;
 
 			//Predict line of sight and deploy in measurement matrix, (9.144)
 			H_mat.block<1, 3>(j, 0) = -delta_r.transpose() / range;
-			H_mat(j, 4) = 1;
+			H_mat(j, 3) = 1;
 		}
 		//Unweighted least - squares solution
 		x_est = x_pred + (H_mat.transpose()*H_mat).inverse()*H_mat.transpose()*(gnss_range - pred_meas);
@@ -159,7 +206,7 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 		x_pred = x_est;
 	}
 	INS_Init.position = x_est.head(3);
-	m_ErrorState.clock_offset = x_est(4);
+	m_ErrorState.clock_offset = x_est(3);
 
 	//VELOCITY AND CLOCK DRIFT
 	omega << 0, 0, omega_ie;
@@ -194,17 +241,17 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 
 			//Predict range rate
 			range_rate = u_as_e.transpose()*(Ce_i*gnss_vel.col(j) + omega_ie*gnss_pos.col(j) - x_pred.head(3) + Omega_ie*INS_Init.position);
-			pred_meas(j) = range_rate + x_pred(4);
+			pred_meas(j) = range_rate + x_pred(3);
 
 			//Predict line of sight and deploy in measurement matrix
 			H_mat.block<1, 3>(j, 0) = -u_as_e.transpose();
-			H_mat(j, 4) = 1;
+			H_mat(j, 3) = 1;
 		}
 		//Unweighted least-squares solution, (9.35)/(9.141)
 		x_est = x_pred + (H_mat.transpose()*H_mat).inverse()*H_mat.transpose()*(gnss_range_rate - pred_meas);
 
 		//Test convergence
-		cnvg = sqrt((x_est - x_pred).transpose()*(x_est - x_pred));
+		cnvg = (x_est - x_pred).norm();
 
 		//Set predictions to estimates for next iteration
 		x_pred = x_est;
@@ -212,7 +259,7 @@ void CInt::LsPosVel(CMain::GNSS_Measurement *mp_GpsSatData, CMain::INS_States& I
 
 	//Set outputs to estimates
 	INS_Init.velocity = x_est.head(3);
-	m_ErrorState.clock_drift = x_est(4);
+	m_ErrorState.clock_drift = x_est(3);
 }
 
 void CInt::run(CMain::INS_States& INS_Estimates, CMain::GNSS_Measurement* GPS_Output, CMain::InsOutput IMU_Output)
@@ -222,16 +269,29 @@ void CInt::run(CMain::INS_States& INS_Estimates, CMain::GNSS_Measurement* GPS_Ou
 		LsPosVel(GPS_Output, INS_Estimates);
 		Calc_NED_States(INS_Estimates);
 		InitAttitude(&IMU_Output, INS_Estimates);
+		Calc_NED_States(INS_Estimates);
 		InitErrorCov();
+		INS_Estimates.accel_bias = INS_Estimates.gyro_bias = Vector3d::Zero();
 		once = false;
 	}
 	INS_Estimate(INS_Estimates, &IMU_Output);
-	//m_predict(INS_Estimates, IMU_Output);
-	//m_correct(INS_Estimates, GPS_Output);
+	Predict(INS_Estimates, IMU_Output);
+	Correct(INS_Estimates, GPS_Output);
 	Calc_NED_States(INS_Estimates);
 }
-
-void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output)
+/********************************************************************************************************
+* Function               : Correct
+* Description            : Correction Step for Error State Kalman Filter
+* Function Parameter     : None
+* Return value           : None
+* Specific library calls : None
+* Functions called       : None
+* Assumptions            : None
+* Reference              : None
+* Version History        :
+* <1.1><Amanpreetsingh><02/03/2019>
+***********************************************************************************************************/
+void CInt::Correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* GPS_Output)
 {
 	MatrixXd u_as_e_T = MatrixXd::Zero(no_sat, 3), pred_meas = MatrixXd::Zero(no_sat, 2);
 	VectorXd delta_z = VectorXd::Zero(2*no_sat);
@@ -299,7 +359,7 @@ void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* G
 	MatrixXd K = ErrorCov*H.transpose()*(H*ErrorCov*H.transpose() + R).inverse();
 
 	// Measurement Innovation
-	delta_z << delta_z.head(visible_sats), delta_z.segment(no_sat, visible_sats);
+	delta_z = (VectorXd(2 * visible_sats) << delta_z.head(visible_sats), delta_z.segment(no_sat, visible_sats)).finished();
 
 	// State Update
 	VectorXd delta_x = K*delta_z;
@@ -326,7 +386,18 @@ void CInt::m_correct(CMain::INS_States& INS_Estimate, CMain::GNSS_Measurement* G
 	INS_Estimate.gyro_bias = INS_Estimate.gyro_bias - m_ErrorState.gyro_bias;
 	m_ErrorState.gyro_bias = Vector3d::Zero();
 }
-
+/********************************************************************************************************
+* Function               : INS_Estimate
+* Description            : Implementation of Inertial Navigation Equations
+* Function Parameter     : None
+* Return value           : None
+* Specific library calls : None
+* Functions called       : Calc_NED_States
+* Assumptions            : Implemented in ECEF Reference
+* Reference              : None
+* Version History        :
+* <1.1><Amanpreetsingh><02/03/2019>
+***********************************************************************************************************/
 void CInt::INS_Estimate(CMain::INS_States& m_INS_States, CMain::InsOutput* m_InsUserOutput)
 {
 	//
@@ -374,7 +445,18 @@ void CInt::INS_Estimate(CMain::INS_States& m_INS_States, CMain::InsOutput* m_Ins
 
 	this->Calc_NED_States(m_INS_States);
 }
-
+/********************************************************************************************************
+* Function               : Calc_NED_States
+* Description            : Calculates NED States(lat,long,alt,vel_ned,rot_ned) from ECEF States(pos,vel,rot)
+* Function Parameter     : None
+* Return value           : None
+* Specific library calls : None
+* Functions called       : None
+* Assumptions            : None
+* Reference              : None
+* Version History        :
+* <1.1><Amanpreetsingh><02/03/2019>
+***********************************************************************************************************/
 void CInt::Calc_NED_States(CMain::INS_States& m_INS_States)
 {
 	Vector3d r = m_INS_States.position;
@@ -399,7 +481,7 @@ void CInt::Calc_NED_States(CMain::INS_States& m_INS_States)
 
 	// CALCULATING HEIGHT
 	double L_b = m_INS_States.latitude;
-	m_INS_States.height = (beta - EqtRadiusOfEarth_Const * T) * cos(L_b) + (r(2) - signlat) * EqtRadiusOfEarth_Const * sqrt(1 - pow(Eccentricity_Const, 2.0)) * sin(L_b);
+	m_INS_States.height = (beta - EqtRadiusOfEarth_Const * T) * cos(L_b) + (r(2) - signlat * EqtRadiusOfEarth_Const * sqrt(1 - pow(Eccentricity_Const, 2.0))) * sin(L_b);
 
 	// ECEF to NED Transform Matrix
 	Matrix3d Ce_n = m_TransformMatrix(L_b, m_INS_States.longitude);
