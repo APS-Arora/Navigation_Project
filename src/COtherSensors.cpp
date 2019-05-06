@@ -84,6 +84,9 @@ void COtherSensors::m_ReadConfigFromFile(string config_file_name)
 ***********************************************************************************************************/
 void COtherSensors::m_Measure(CMain::TimeVar time, CMain::UserMot state)
 {
+	/*
+	*	CALCULATING MAGNETOMETER READINGS
+	*/
 	Eigen::Matrix3d C_mn = C_mb*m_TransformMatrix(state.roll,state.pitch,state.yaw);
 	// Calculating Decimal Year from Time Input
 	double decyear = time.year + (time.days_in_year - 1. + time.time_of_day / 86400.) / (365. + ((time.year % 4) ? 0. : 1.));
@@ -108,8 +111,11 @@ void COtherSensors::m_Measure(CMain::TimeVar time, CMain::UserMot state)
 	GeographicLib::MagneticModel::FieldComponents(Bx, By, Bz, dummy, dummy, declination, dummy);
 	m_RecentMagTruth.mag_heading = yaw_nm - declination;
 	// Calculating Measured Magnetic Heading
-	b_heading = (C_mn*AngleAxisd(yaw_nm, Vector3d::UnitZ())).transpose()*m_RecentMagMeasurement.mag_strength;
+	b_heading = (C_mn*AngleAxisd(yaw_nm*EIGEN_PI/180., Vector3d::UnitZ())).transpose()*m_RecentMagMeasurement.mag_strength;
 	m_RecentMagMeasurement.mag_heading = atan2(-b_heading(1), b_heading(0)) * 180. / EIGEN_PI;
+	/*
+	*	CALCULATING BAROMETRIC ALTIMETER READINGS
+	*/
 	// Calculating Orthometric Alt from Geodetic Alt
 	double h_ortho = geo.ConvertHeight(state.lat * 180. / EIGEN_PI, state.longi * 180. / EIGEN_PI, state.height, GeographicLib::Geoid::ELLIPSOIDTOGEOID);
 	double delta;
